@@ -85,7 +85,7 @@ export class NeuroSynMathOrchestrator {
             const candidateProofs = await this.cognitiveMesh.execute(
                 { name: parsedProblem.goal.statement, type: 'proof_deduction' },
                 { problem: parsedProblem },
-                { domains: parsedProblem.domains }
+                { domains: parsedProblem.domains, stream } // ⚡ Pass stream callback down!
             );
 
             // ⚡ FAST FALLBACK: Prevent 60s secondary LLM execution if mesh agents fail

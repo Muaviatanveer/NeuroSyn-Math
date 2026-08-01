@@ -43,7 +43,8 @@ export class CognitiveMesh {
 
     async execute(task, context, options = {}) {
         const targetDomains = options.domains || [context?.problem?.primaryDomain || 'Algebra'];
-
+        const stream = options.stream || (() => {}); // ⚡ Extract stream callback
+        
         // Focus VRAM compute on Primary Domain Specialist
         const primaryDomain = targetDomains[0] || 'Algebra';
         this.logger.info(`[CognitiveMesh] Dispatching primary task to domain specialist: [${primaryDomain}]...`);
@@ -51,9 +52,8 @@ export class CognitiveMesh {
         const agent = this.specialists.get(primaryDomain) || this.specialists.get('Logic');
 
         try {
-            // ⚡ FIX: Await the agent directly WITHOUT a timeout limit.
-            // This ensures local 32B models are never killed mid-thought.
-            const result = await agent.think(task, context);
+            // ⚡ Pass stream down to agent.think()
+            const result = await agent.think(task, context, stream);
             return result ? [result] : [];
         } catch (err) {
             this.logger.error(`[CognitiveMesh] Specialist ${agent.name} failed: ${err.message}`);

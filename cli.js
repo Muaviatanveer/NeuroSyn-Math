@@ -372,12 +372,29 @@ async function startREPL() {
                 spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
             }, 500);
 
+            let isStreamingTokens = false;
+
             const streamHandler = (type, data) => {
                 if (type === 'status') {
+                    if (isStreamingTokens) {
+                        writeLine(); // Break line after token stream finishes
+                        isStreamingTokens = false;
+                        spinner.start(); // Resume spinner
+                    }
                     const msg = data.message.replace(/\[.*?\]/, '').trim();
-                    // ⚡ Truncate status text to avoid awkward terminal wrapping
                     const cleanMsg = msg.length > 70 ? msg.slice(0, 67) + '...' : msg;
                     spinner.text = th.info(`⚡ ${cleanMsg}`);
+                } else if (type === 'token') {
+                    if (!isStreamingTokens) {
+                        spinner.stop(); // Pause spinner to avoid graphical glitches
+                        process.stdout.write(`\n  ${th.muted('🧠 [Model Thinking]: ')}`);
+                        isStreamingTokens = true;
+                    }
+                    // Print to CLI in real-time
+                    process.stdout.write(th.muted(data));
+                    
+                    // Also stream silently to backend.log for tail -f
+                    fs.appendFileSync(LOG_FILE, data, 'utf8');
                 }
             };
 

@@ -19,12 +19,12 @@ export class CombinatoricsAgent {
         this.capabilities = ['combinatorics', 'counting', 'invariants', 'generating_functions', 'pigeonhole', 'python_simulation'];
     }
 
-    async think(task, context = {}) {
+    async think(task, context = {}, stream = () => {}) { // ⚡ Add stream parameter
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[CombinatoricsAgent] 📌 Step 1/5: Starting think() on prompt...`);
 
         this.logger.info(`[CombinatoricsAgent] 📌 Step 2/5: Calling _generateCombinatoricsScript()...`);
-        let simScript = await this._generateCombinatoricsScript(promptText);
+        let simScript = await this._generateCombinatoricsScript(promptText, stream); // Pass it down
         this.logger.info(`[CombinatoricsAgent] 📌 Step 3/5: Script generated (${simScript ? simScript.length : 0} chars).`);
 
         let toolResult = { output: 'Tool execution skipped.', success: true };
@@ -60,29 +60,32 @@ export class CombinatoricsAgent {
         };
     }
 
-    async _generateCombinatoricsScript(prompt) {
+    async _generateCombinatoricsScript(prompt, stream) {
         const sysPrompt = `
-You are the Combinatorial Simulation Generator for CombinatoricsAgent in NeuroSyn-Math.
-Write a standalone Python script using \`math.comb\` or \`math.factorial\` to calculate the exact combinatorial answer.
-
-⚡ STRICT INSTRUCTIONS:
-1. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
-2. DO NOT output reasoning tags (<think>...</think>) or text before the code block.
+You are the Combinatorial Simulation Generator. Write a standalone Python script.
+Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
         try {
-            const res = await this.client.chat.completions.create({
+            const response = await this.client.chat.completions.create({
                 model: this.modelName,
                 messages: [
                     { role: 'system', content: sysPrompt },
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
                 temperature: 0.0,
-                max_tokens: 1000
+                max_tokens: 1000,
+                stream: true // ⚡ Enable Streaming!
             });
 
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
+            let fullContent = '';
+            for await (const chunk of response) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullContent += token;
+                if (token) stream('token', token); // ⚡ Stream token to CLI/Logs!
+            }
+
+            const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
             return match[1].trim();
         } catch (e) {
             return null;
