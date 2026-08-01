@@ -1,6 +1,6 @@
 /**
  * @file src/quantix/agents/cognitiveMesh.js
- * @description NeuroSyn Parallel Specialist Dispatcher with Tool Execution.
+ * @description NeuroSyn Parallel Specialist Dispatcher with Timeout Safety.
  */
 
 import logger from '../../utils/logger.js';
@@ -10,6 +10,8 @@ import { NumberTheoryAgent } from './specialists/NumberTheoryAgent.js';
 import { CombinatoricsAgent } from './specialists/CombinatoricsAgent.js';
 import { AnalysisAgent } from './specialists/AnalysisAgent.js';
 import { LogicAgent } from './specialists/LogicAgent.js';
+
+const AGENT_TIMEOUT_MS = 35000; // 35s hard limit per agent
 
 export class CognitiveMesh {
     constructor({ clients, logger: appLogger = logger }) {
@@ -54,9 +56,10 @@ export class CognitiveMesh {
             selectedAgents.push(this.specialists.get('Logic'));
         }
 
+        // Execute all selected agents in parallel with individual timeout protection
         const promises = selectedAgents.map(async (agent) => {
             try {
-                const result = await agent.think(task, context);
+                const result = await this._execWithTimeout(agent.think(task, context), AGENT_TIMEOUT_MS, agent.name);
                 return result;
             } catch (err) {
                 this.logger.error(`[CognitiveMesh] Specialist ${agent.name} failed: ${err.message}`);
@@ -66,5 +69,17 @@ export class CognitiveMesh {
 
         const thoughts = await Promise.all(promises);
         return thoughts.filter(t => t !== null);
+    }
+
+    _execWithTimeout(promise, timeoutMs, agentName) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(`Specialist ${agentName} timed out after ${timeoutMs / 1000}s`));
+            }, timeoutMs);
+
+            promise
+                .then(res => { clearTimeout(timer); resolve(res); })
+                .catch(err => { clearTimeout(timer); reject(err); });
+        });
     }
 }
