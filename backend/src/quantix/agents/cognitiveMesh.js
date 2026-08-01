@@ -1,9 +1,10 @@
 /**
  * @file src/quantix/agents/cognitiveMesh.js
- * @description NeuroSyn Parallel Specialist Dispatcher with Timeout Safety.
+ * @description NeuroSyn Parallel Specialist Dispatcher with Timeout Safety & Model Routing.
  */
 
 import logger from '../../utils/logger.js';
+import { getModelForRole } from '../../config/clients.js';
 import { AlgebraAgent } from './specialists/AlgebraAgent.js';
 import { GeometryAgent } from './specialists/GeometryAgent.js';
 import { NumberTheoryAgent } from './specialists/NumberTheoryAgent.js';
@@ -24,12 +25,14 @@ export class CognitiveMesh {
 
     _initializeSpecialists() {
         const primaryClient = this.clients.openai || this.clients.deepseek || this.clients.anthropic;
+        // ⚡ FIX: Explicitly bind specialists to local reasoning model (deepseek-r1:32b) instead of gpt-4o
+        const mathModel = getModelForRole('math_reasoning');
 
         if (!primaryClient) {
             throw new Error('[CognitiveMesh] Requires an active LLM client.');
         }
 
-        const cfg = { client: primaryClient, logger: this.logger };
+        const cfg = { client: primaryClient, logger: this.logger, modelName: mathModel };
 
         this.specialists.set('Algebra', new AlgebraAgent(cfg));
         this.specialists.set('Geometry', new GeometryAgent(cfg));
@@ -38,7 +41,7 @@ export class CognitiveMesh {
         this.specialists.set('Analysis', new AnalysisAgent(cfg));
         this.specialists.set('Logic', new LogicAgent(cfg));
 
-        this.logger.info(`[CognitiveMesh] Initialized ${this.specialists.size} Active Tool-Executing Domain Specialists.`);
+        this.logger.info(`[CognitiveMesh] Initialized ${this.specialists.size} Tool Specialists on model "${mathModel}".`);
     }
 
     async execute(task, context, options = {}) {
@@ -56,7 +59,6 @@ export class CognitiveMesh {
             selectedAgents.push(this.specialists.get('Logic'));
         }
 
-        // Execute all selected agents in parallel with individual timeout protection
         const promises = selectedAgents.map(async (agent) => {
             try {
                 const result = await this._execWithTimeout(agent.think(task, context), AGENT_TIMEOUT_MS, agent.name);
