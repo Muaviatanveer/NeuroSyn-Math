@@ -12,7 +12,7 @@ import { CombinatoricsAgent } from './specialists/CombinatoricsAgent.js';
 import { AnalysisAgent } from './specialists/AnalysisAgent.js';
 import { LogicAgent } from './specialists/LogicAgent.js';
 
-const AGENT_TIMEOUT_MS = 65000; // ⚡ Increased to 65s hard limit for local 32B models
+const AGENT_TIMEOUT_MS = 120000; // ⚡ 120s limit to allow 32B models to write massive JSON math proofs
 
 export class CognitiveMesh {
     constructor({ clients, logger: appLogger = logger }) {
@@ -25,7 +25,6 @@ export class CognitiveMesh {
 
     _initializeSpecialists() {
         const primaryClient = this.clients.openai || this.clients.deepseek || this.clients.anthropic;
-        // ⚡ FIX: Explicitly bind specialists to local reasoning model (deepseek-r1:32b) instead of gpt-4o
         const mathModel = getModelForRole('math_reasoning');
 
         if (!primaryClient) {
@@ -46,9 +45,8 @@ export class CognitiveMesh {
 
     async execute(task, context, options = {}) {
         const targetDomains = options.domains || [context?.problem?.primaryDomain || 'Algebra'];
-        
-        // ⚡ OPTIMIZATION FOR LOCAL VRAM: 
-        // Focus VRAM compute on the Primary Domain Specialist to avoid GPU context-switching delays
+
+        // Focus VRAM compute on Primary Domain Specialist
         const primaryDomain = targetDomains[0] || 'Algebra';
         this.logger.info(`[CognitiveMesh] Dispatching primary task to domain specialist: [${primaryDomain}]...`);
 
