@@ -151,15 +151,21 @@ async function authenticateUser() {
 }
 
 /* ============================================================================
- * 3. BACKEND LOAD
+ * 3. BACKEND LOAD (Package-relative path fix for npx)
  * ==========================================================================*/
-const REAL_BACKEND_PATH = path.resolve('./backend/src/services/synapseFabric.js');
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const REAL_BACKEND_PATH = path.join(__dirname, 'backend/src/services/synapseFabric.js');
+
 let backend;
 if (fs.existsSync(REAL_BACKEND_PATH)) {
     const mod = await import(REAL_BACKEND_PATH);
     backend = mod.default;
 } else {
-    writeLine(chalk.red('❌ Backend fabric missing at ./backend/src/services/synapseFabric.js\n'));
+    writeLine(chalk.red(`❌ Backend fabric missing at ${REAL_BACKEND_PATH}\n`));
     process.exit(1);
 }
 
