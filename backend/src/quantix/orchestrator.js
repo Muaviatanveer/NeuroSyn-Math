@@ -110,8 +110,7 @@ export class NeuroSynMathOrchestrator {
             const consensusResult = this._runConsensusEngine(formalVerificationResults);
             memory.set('consensusResult', consensusResult);
 
-            stream('status', { message: '✍️ Formatting final mathematical solution...' });
-            const finalOutput = await this._generateExplanation(parsedProblem, consensusResult);
+            const finalOutput = await this._generateExplanation(parsedProblem, consensusResult, stream);
 
             this.cognitiveMirror.reflect(memory.getSnapshot()).catch(err =>
                 this.logger.warn(`[CognitiveMirror] Reflection background error: ${err.message}`)
@@ -200,11 +199,36 @@ export class NeuroSynMathOrchestrator {
         return { topProof: scored[0] || null, topScore: scored[0]?.compositeScore || 0 };
     }
 
-    async _generateExplanation(parsedProblem, consensusResult) {
+    async _generateExplanation(parsedProblem, consensusResult, stream = () => {}) {
         const top = consensusResult.topProof;
         if (!top) return { explanation: { undergraduate: "No candidate proof could be constructed." } };
 
-        const solutionText = top.content || top.proofSteps?.join('\n\n') || "Solution derived successfully.";
-        return { explanation: { undergraduate: solutionText } };
+        // If proof text is already derived and formatted, return directly
+        if (top.content && top.content.length > 300) {
+            return { explanation: { undergraduate: top.content } };
+        }
+
+        const prompt = `Synthesize a publication-grade mathematical solution for:\n"${parsedProblem.rawText}"\n\nProof Context:\n${top.content || JSON.stringify(top.proofSteps)}`;
+
+        try {
+            const res = await this.primaryClient.chat.completions.create({
+                model: this.mathModel,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1,
+                stream: true // ⚡ Enable Synthesizer Streaming!
+            });
+
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token) stream('token', { agent: 'Synthesizer', token }); // ⚡ Stream to CLI
+            }
+
+            let cleaned = fullText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            return { explanation: { undergraduate: cleaned || top.content } };
+        } catch (e) {
+            return { explanation: { undergraduate: top.content || "Solution derived successfully." } };
+        }
     }
 }

@@ -19,11 +19,41 @@ export class NumberTheoryAgent {
         this.capabilities = ['number_theory', 'diophantine', 'modular_arithmetic', 'primes', 'z3_smt_tools'];
     }
 
-    async think(task, context = {}) {
+    async _streamLLM(sysPrompt, userPrompt, stream, agentName, temp = 0.1, maxTokens = null) {
+        try {
+            const options = {
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: temp,
+                stream: true
+            };
+            if (maxTokens) {
+                options.max_tokens = maxTokens;
+            }
+            const res = await this.client.chat.completions.create(options);
+
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: agentName, token });
+                }
+            }
+            return fullText;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async think(task, context = {}, stream = () => {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[NumberTheoryAgent] Processing number theory task: "${promptText.slice(0, 80)}..."`);
 
-        let numberTheoryScript = await this._generateNumberTheoryScript(promptText);
+        let numberTheoryScript = await this._generateNumberTheoryScript(promptText, stream);
         let toolResult = { output: 'Tool execution skipped.', success: true };
 
         // ⚡ Python Sandbox Auto-Correction Loop (up to 2 repair passes)
@@ -39,11 +69,11 @@ export class NumberTheoryAgent {
                 }
 
                 this.logger.warn(`[NumberTheoryAgent] Python Tool execution error on attempt ${attempt}. Initiating code repair loop...`);
-                numberTheoryScript = await this._repairPythonScript(numberTheoryScript, toolResult.output || toolResult.error);
+                numberTheoryScript = await this._repairPythonScript(numberTheoryScript, toolResult.output || toolResult.error, stream);
             }
         }
 
-        const proofResult = await this._generateNumberTheoryProof(promptText, toolResult.output, numberTheoryScript);
+        const proofResult = await this._generateNumberTheoryProof(promptText, toolResult.output, numberTheoryScript, stream);
 
         return {
             agent: this.name,
@@ -56,7 +86,7 @@ export class NumberTheoryAgent {
         };
     }
 
-    async _generateNumberTheoryScript(prompt) {
+    async _generateNumberTheoryScript(prompt, stream) {
         const sysPrompt = `
 You are the Number Theory Tool Generator for NumberTheoryAgent in NeuroSyn-Math.
 Write a standalone Python script to solve or verify the number-theoretic problem.
@@ -69,25 +99,13 @@ Write a standalone Python script to solve or verify the number-theoretic problem
 Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
-        try {
-            const res = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"` }
-                ],
-                temperature: 0.0
-            });
-
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
-            return match[1].trim();
-        } catch (e) {
-            return null;
-        }
+        const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
+        if (!fullContent) return null;
+        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
+        return match[1].trim();
     }
 
-    async _repairPythonScript(badScript, errorMessage) {
+    async _repairPythonScript(badScript, errorMessage, stream) {
         const prompt = `Fix this Python script which failed during execution.
 
 Execution Error Output:
@@ -103,22 +121,13 @@ ${badScript}
 Ensure you track exact integer calculations without floating-point precision loss.
 Output ONLY the corrected valid \`\`\`python ... \`\`\` block.`;
 
-        try {
-            const res = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.0
-            });
-
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
-            return match[1].trim();
-        } catch (e) {
-            return badScript;
-        }
+        const fullContent = await this._streamLLM('', prompt, stream, this.name, 0.0, 1000);
+        if (!fullContent) return badScript;
+        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, badScript];
+        return match[1].trim();
     }
 
-    async _generateNumberTheoryProof(prompt, toolOutput, verifiedScript) {
+    async _generateNumberTheoryProof(prompt, toolOutput, verifiedScript, stream) {
         const sysPrompt = `
 You are the NeuroSyn Number Theory Specialist.
 Generate a rigorous, publication-grade mathematical proof.
@@ -129,28 +138,18 @@ STRICT INSTRUCTIONS:
 3. DO NOT output JSON. Output raw Markdown text.
 `;
 
-        try {
-            const response = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"\nTool Output: ${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\`` }
-                ],
-                temperature: 0.1
-            });
+        const userPrompt = `Problem: "${prompt}"\nTool Output: ${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\``;
+        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1);
 
-            // Clean the <think> tags out of the raw text
-            let rawText = response.choices[0].message.content || '';
-            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        // Clean the <think> tags out of the raw text
+        let rawText = fullContent || '';
+        rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-            // Construct the JSON object manually to prevent LLM parsing failures!
-            return {
-                proofText: rawText || 'Number theory proof derived successfully.',
-                steps: [rawText.slice(0, 100) + '...'],
-                leanCode: ''
-            };
-        } catch (e) {
-            return { proofText: 'Number theory proof fallback.', steps: [prompt], leanCode: '' };
-        }
+        // Construct the JSON object manually to prevent LLM parsing failures!
+        return {
+            proofText: rawText || 'Number theory proof derived successfully.',
+            steps: [rawText.slice(0, 100) + '...'],
+            leanCode: ''
+        };
     }
 }

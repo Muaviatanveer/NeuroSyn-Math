@@ -17,11 +17,41 @@ export class AlgebraAgent {
         this.capabilities = ['algebra', 'group_theory', 'polynomials', 'linear_algebra', 'sympy_tools'];
     }
 
-    async think(task, context = {}) {
+    async _streamLLM(sysPrompt, userPrompt, stream, agentName, temp = 0.1, maxTokens = null) {
+        try {
+            const options = {
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: temp,
+                stream: true
+            };
+            if (maxTokens) {
+                options.max_tokens = maxTokens;
+            }
+            const res = await this.client.chat.completions.create(options);
+
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: agentName, token });
+                }
+            }
+            return fullText;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async think(task, context = {}, stream = () => {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[AlgebraAgent] Processing algebraic task: "${promptText.slice(0, 80)}..."`);
 
-        const sympyScript = await this._generateSymPyScript(promptText, context);
+        const sympyScript = await this._generateSymPyScript(promptText, context, stream);
 
         let toolExecutionResult = { output: 'Tool execution bypassed.', success: true };
         if (sympyScript) {
@@ -30,7 +60,7 @@ export class AlgebraAgent {
             this.logger.info(`[AlgebraAgent] Tool Output:\n${toolExecutionResult.output?.slice(0, 200)}`);
         }
 
-        const finalProof = await this._generateVerifiedProof(promptText, toolExecutionResult.output, context);
+        const finalProof = await this._generateVerifiedProof(promptText, toolExecutionResult.output, context, stream);
 
         return {
             agent: this.name,
@@ -43,32 +73,20 @@ export class AlgebraAgent {
         };
     }
 
-    async _generateSymPyScript(prompt, context) {
+    async _generateSymPyScript(prompt, context, stream) {
         const sysPrompt = `
 You are the SymPy Code Generator for AlgebraAgent in NeuroSyn-Math.
 Write a standalone Python script using SymPy to simplify, solve, or verify the algebraic statement.
 Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
-        try {
-            const res = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"` }
-                ],
-                temperature: 0.0
-            });
-
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
-            return match[1].trim();
-        } catch (e) {
-            return null;
-        }
+        const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
+        if (!fullContent) return null;
+        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
+        return match[1].trim();
     }
 
-    async _generateVerifiedProof(prompt, toolOutput, context) {
+    async _generateVerifiedProof(prompt, toolOutput, context, stream) {
         const sysPrompt = `
 You are the NeuroSyn Algebra Specialist.
 Generate a rigorous step-by-step algebraic proof.
@@ -79,28 +97,18 @@ STRICT INSTRUCTIONS:
 3. DO NOT output JSON. Output raw Markdown text.
 `;
 
-        try {
-            const response = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"\nSymPy Tool Execution Output:\n${toolOutput}` }
-                ],
-                temperature: 0.1
-            });
+        const userPrompt = `Problem: "${prompt}"\nSymPy Tool Execution Output:\n${toolOutput}`;
+        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1);
 
-            // Clean the <think> tags out of the raw text
-            let rawText = response.choices[0].message.content || '';
-            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        // Clean the <think> tags out of the raw text
+        let rawText = fullContent || '';
+        rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-            // Construct the JSON object manually to prevent LLM parsing failures!
-            return {
-                proofText: rawText || 'Algebraic proof derived successfully.',
-                steps: [rawText.slice(0, 100) + '...'],
-                leanCode: ''
-            };
-        } catch (e) {
-            return { proofText: 'Algebraic proof fallback.', steps: [prompt], leanCode: '' };
-        }
+        // Construct the JSON object manually to prevent LLM parsing failures!
+        return {
+            proofText: rawText || 'Algebraic proof derived successfully.',
+            steps: [rawText.slice(0, 100) + '...'],
+            leanCode: ''
+        };
     }
 }

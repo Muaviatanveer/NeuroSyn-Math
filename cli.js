@@ -372,29 +372,34 @@ async function startREPL() {
                 spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
             }, 500);
 
-            let isStreamingTokens = false;
+            let activeAgentStream = null;
 
             const streamHandler = (type, data) => {
                 if (type === 'status') {
-                    if (isStreamingTokens) {
-                        writeLine(); // Break line after token stream finishes
-                        isStreamingTokens = false;
+                    if (activeAgentStream) {
+                        writeLine(); // New line after agent finishes streaming
+                        activeAgentStream = null;
                         spinner.start(); // Resume spinner
                     }
                     const msg = data.message.replace(/\[.*?\]/, '').trim();
                     const cleanMsg = msg.length > 70 ? msg.slice(0, 67) + '...' : msg;
                     spinner.text = th.info(`⚡ ${cleanMsg}`);
                 } else if (type === 'token') {
-                    if (!isStreamingTokens) {
-                        spinner.stop(); // Pause spinner to avoid graphical glitches
-                        process.stdout.write(`\n  ${th.muted('🧠 [Model Thinking]: ')}`);
-                        isStreamingTokens = true;
+                    const agentName = typeof data === 'object' ? (data.agent || 'Agent') : 'Thinking';
+                    const tokenStr = typeof data === 'object' ? (data.token || '') : String(data);
+
+                    if (activeAgentStream !== agentName) {
+                        if (activeAgentStream) writeLine();
+                        spinner.stop(); // Pause spinner to render agent badge
+                        writeLine();
+                        process.stdout.write(`  ${th.accent.bold(`🧠 [${agentName}]`)}: `);
+                        activeAgentStream = agentName;
                     }
-                    // Print to CLI in real-time
-                    process.stdout.write(th.muted(data));
+
+                    process.stdout.write(th.muted(tokenStr));
                     
-                    // Also stream silently to backend.log for tail -f
-                    fs.appendFileSync(LOG_FILE, data, 'utf8');
+                    // Stream silently to background log for tail -f
+                    fs.appendFileSync(LOG_FILE, tokenStr, 'utf8');
                 }
             };
 

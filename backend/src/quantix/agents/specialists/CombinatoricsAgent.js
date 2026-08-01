@@ -19,12 +19,42 @@ export class CombinatoricsAgent {
         this.capabilities = ['combinatorics', 'counting', 'invariants', 'generating_functions', 'pigeonhole', 'python_simulation'];
     }
 
-    async think(task, context = {}, stream = () => {}) { // ⚡ Add stream parameter
+    async _streamLLM(sysPrompt, userPrompt, stream, agentName, temp = 0.1, maxTokens = null) {
+        try {
+            const options = {
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: temp,
+                stream: true
+            };
+            if (maxTokens) {
+                options.max_tokens = maxTokens;
+            }
+            const res = await this.client.chat.completions.create(options);
+
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: agentName, token });
+                }
+            }
+            return fullText;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async think(task, context = {}, stream = () => {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[CombinatoricsAgent] 📌 Step 1/5: Starting think() on prompt...`);
 
         this.logger.info(`[CombinatoricsAgent] 📌 Step 2/5: Calling _generateCombinatoricsScript()...`);
-        let simScript = await this._generateCombinatoricsScript(promptText, stream); // Pass it down
+        let simScript = await this._generateCombinatoricsScript(promptText, stream);
         this.logger.info(`[CombinatoricsAgent] 📌 Step 3/5: Script generated (${simScript ? simScript.length : 0} chars).`);
 
         let toolResult = { output: 'Tool execution skipped.', success: true };
@@ -41,12 +71,12 @@ export class CombinatoricsAgent {
                 }
 
                 this.logger.warn(`[CombinatoricsAgent] Python tool failed on attempt ${attempt}. Repairing...`);
-                simScript = await this._repairPythonScript(simScript, toolResult.output || toolResult.error);
+                simScript = await this._repairPythonScript(simScript, toolResult.output || toolResult.error, stream);
             }
         }
 
         this.logger.info(`[CombinatoricsAgent] 📌 Step 5/5: Calling _generateCombinatoricsProof()...`);
-        const proofResult = await this._generateCombinatoricsProof(promptText, toolResult.output, simScript);
+        const proofResult = await this._generateCombinatoricsProof(promptText, toolResult.output, simScript, stream);
         this.logger.info(`[CombinatoricsAgent] ✅ think() completed successfully.`);
 
         return {
@@ -66,33 +96,13 @@ You are the Combinatorial Simulation Generator. Write a standalone Python script
 Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
-        try {
-            const response = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"` }
-                ],
-                temperature: 0.0,
-                max_tokens: 1000,
-                stream: true // ⚡ Enable Streaming!
-            });
-
-            let fullContent = '';
-            for await (const chunk of response) {
-                const token = chunk.choices[0]?.delta?.content || '';
-                fullContent += token;
-                if (token) stream('token', token); // ⚡ Stream token to CLI/Logs!
-            }
-
-            const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
-            return match[1].trim();
-        } catch (e) {
-            return null;
-        }
+        const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
+        if (!fullContent) return null;
+        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
+        return match[1].trim();
     }
 
-    async _repairPythonScript(badScript, errorMessage) {
+    async _repairPythonScript(badScript, errorMessage, stream) {
         const prompt = `Fix this Python script which failed during execution.
 
 Execution Error Output:
@@ -108,23 +118,13 @@ ${badScript}
 Ensure you track exact integer calculations without floating point precision loss.
 Output ONLY the corrected valid \`\`\`python ... \`\`\` block.`;
 
-        try {
-            const res = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.0,
-                max_tokens: 1000
-            });
-
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, badScript];
-            return match[1].trim();
-        } catch (e) {
-            return badScript;
-        }
+        const fullContent = await this._streamLLM('', prompt, stream, this.name, 0.0, 1000);
+        if (!fullContent) return badScript;
+        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, badScript];
+        return match[1].trim();
     }
 
-    async _generateCombinatoricsProof(prompt, toolOutput, verifiedScript) {
+    async _generateCombinatoricsProof(prompt, toolOutput, verifiedScript, stream) {
         const sysPrompt = `
 You are the NeuroSyn Combinatorics Specialist.
 Generate a rigorous, publication-grade combinatorial proof.
@@ -135,28 +135,17 @@ STRICT INSTRUCTIONS:
 3. DO NOT output JSON. Output raw Markdown text.
 `;
 
-        try {
-            const response = await this.client.chat.completions.create({
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"\nTool Output: ${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\`` }
-                ],
-                temperature: 0.1
-            });
+        const userPrompt = `Problem: "${prompt}"\nTool Output: ${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\``;
+        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1);
 
-            // Clean the <think> tags out of the raw text
-            let rawText = response.choices[0].message.content || '';
-            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        // Clean the <think> tags out of the raw text
+        let rawText = fullContent || '';
+        rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
-            // Construct the JSON object manually to prevent LLM parsing failures!
-            return {
-                proofText: rawText || 'Combinatorial proof derived successfully.',
-                steps: [rawText.slice(0, 100) + '...'],
-                leanCode: ''
-            };
-        } catch (e) {
-            return { proofText: 'Combinatorial proof fallback.', steps: [prompt], leanCode: '' };
-        }
+        return {
+            proofText: rawText || 'Combinatorial proof derived successfully.',
+            steps: [rawText.slice(0, 100) + '...'],
+            leanCode: ''
+        };
     }
 }
