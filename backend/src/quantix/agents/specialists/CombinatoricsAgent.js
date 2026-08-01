@@ -21,29 +21,33 @@ export class CombinatoricsAgent {
 
     async think(task, context = {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
-        this.logger.info(`[CombinatoricsAgent] Processing combinatorics task: "${promptText.slice(0, 80)}..."`);
+        this.logger.info(`[CombinatoricsAgent] 📌 Step 1/5: Starting think() on prompt...`);
 
+        this.logger.info(`[CombinatoricsAgent] 📌 Step 2/5: Calling _generateCombinatoricsScript()...`);
         let simScript = await this._generateCombinatoricsScript(promptText);
+        this.logger.info(`[CombinatoricsAgent] 📌 Step 3/5: Script generated (${simScript ? simScript.length : 0} chars).`);
+
         let toolResult = { output: 'Tool execution skipped.', success: true };
 
-        // ⚡ Python Sandbox Auto-Correction Loop (up to 2 repair passes)
         if (simScript) {
             for (let attempt = 1; attempt <= 2; attempt++) {
-                this.logger.info(`[CombinatoricsAgent] 🎲 Executing Python combinatorial simulation script (Attempt ${attempt})...`);
+                this.logger.info(`[CombinatoricsAgent] 📌 Step 4/5: Executing Python sandbox (Attempt ${attempt})...`);
                 toolResult = await this.codeExecutor.executeSymbolicMath(simScript);
 
                 const hasError = !toolResult.output || toolResult.output.includes('Traceback') || toolResult.output.includes('Error:');
                 if (!hasError) {
-                    this.logger.info(`[CombinatoricsAgent] Tool Output Verified:\n${toolResult.output?.slice(0, 200)}`);
+                    this.logger.info(`[CombinatoricsAgent] Python tool output verified: ${toolResult.output?.slice(0, 50)}...`);
                     break;
                 }
 
-                this.logger.warn(`[CombinatoricsAgent] Python execution error on attempt ${attempt}. Initiating code repair loop...`);
+                this.logger.warn(`[CombinatoricsAgent] Python tool failed on attempt ${attempt}. Repairing...`);
                 simScript = await this._repairPythonScript(simScript, toolResult.output || toolResult.error);
             }
         }
 
+        this.logger.info(`[CombinatoricsAgent] 📌 Step 5/5: Calling _generateCombinatoricsProof()...`);
         const proofResult = await this._generateCombinatoricsProof(promptText, toolResult.output, simScript);
+        this.logger.info(`[CombinatoricsAgent] ✅ think() completed successfully.`);
 
         return {
             agent: this.name,

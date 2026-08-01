@@ -21,29 +21,33 @@ export class GeometryAgent {
 
     async think(task, context = {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
-        this.logger.info(`[GeometryAgent] Processing geometric task: "${promptText.slice(0, 80)}..."`);
+        this.logger.info(`[GeometryAgent] 📌 Step 1/5: Starting think() on prompt...`);
 
+        this.logger.info(`[GeometryAgent] 📌 Step 2/5: Calling _generateGeometryScript()...`);
         let geometryScript = await this._generateGeometryScript(promptText);
+        this.logger.info(`[GeometryAgent] 📌 Step 3/5: Script generated (${geometryScript ? geometryScript.length : 0} chars).`);
+
         let toolResult = { output: 'Tool execution skipped.', success: true };
 
-        // ⚡ Python Sandbox Auto-Correction Loop (up to 2 repair passes)
         if (geometryScript) {
             for (let attempt = 1; attempt <= 2; attempt++) {
-                this.logger.info(`[GeometryAgent] 📐 Executing SymPy Geometry tool script (Attempt ${attempt})...`);
+                this.logger.info(`[GeometryAgent] 📌 Step 4/5: Executing Python sandbox (Attempt ${attempt})...`);
                 toolResult = await this.codeExecutor.executeSymbolicMath(geometryScript);
 
                 const hasError = !toolResult.output || toolResult.output.includes('Traceback') || toolResult.output.includes('Error:');
                 if (!hasError) {
-                    this.logger.info(`[GeometryAgent] Geometry Tool Output Verified:\n${toolResult.output?.slice(0, 200)}`);
+                    this.logger.info(`[GeometryAgent] Python tool output verified: ${toolResult.output?.slice(0, 50)}...`);
                     break;
                 }
 
-                this.logger.warn(`[GeometryAgent] Geometry tool error on attempt ${attempt}. Initiating code repair loop...`);
+                this.logger.warn(`[GeometryAgent] Python tool failed on attempt ${attempt}. Repairing...`);
                 geometryScript = await this._repairPythonScript(geometryScript, toolResult.output || toolResult.error);
             }
         }
 
+        this.logger.info(`[GeometryAgent] 📌 Step 5/5: Calling _generateGeometryProof()...`);
         const proofResult = await this._generateGeometryProof(promptText, toolResult.output, geometryScript);
+        this.logger.info(`[GeometryAgent] ✅ think() completed successfully.`);
 
         return {
             agent: this.name,
