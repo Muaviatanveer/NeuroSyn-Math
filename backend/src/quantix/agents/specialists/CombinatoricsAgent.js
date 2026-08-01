@@ -1,8 +1,6 @@
 /**
  * @file CombinatoricsAgent.js
- * @description Dedicated Combinatorics Specialist Agent for NeuroSyn-Math.
- * Handles Counting, Permutations, Invariants, Pigeonhole Principle, and Generating Functions.
- * Uses Python brute-force scans and SymPy generating series tools to test small-n cases.
+ * @description Dedicated Combinatorics Specialist Agent with Auto-Correction & Fast Sandbox Execution.
  */
 
 import { CodeExecutorService } from '../../../services/codeExecutorService.js';
@@ -21,26 +19,31 @@ export class CombinatoricsAgent {
         this.capabilities = ['combinatorics', 'counting', 'invariants', 'generating_functions', 'pigeonhole', 'python_simulation'];
     }
 
-    /**
-     * Executes combinatorial reasoning with small-n Python simulation tools.
-     */
     async think(task, context = {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[CombinatoricsAgent] Processing combinatorics task: "${promptText.slice(0, 80)}..."`);
 
-        // Step 1: Generate Small-N Brute Force or Series Expansion Tool Script
-        const simScript = await this._generateCombinatoricsScript(promptText);
-
-        // Step 2: Run Python Brute Force / Generating Function Simulation
+        let simScript = await this._generateCombinatoricsScript(promptText);
         let toolResult = { output: 'Tool execution skipped.', success: true };
+
+        // ⚡ Python Sandbox Auto-Correction Loop (up to 2 repair passes)
         if (simScript) {
-            this.logger.info('[CombinatoricsAgent] 🎲 Executing Python combinatorial simulation script...');
-            toolResult = await this.codeExecutor.executeSymbolicMath(simScript, ['sympy', 'scipy', 'numpy']);
-            this.logger.info(`[CombinatoricsAgent] Tool Output:\n${toolResult.output?.slice(0, 200)}`);
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                this.logger.info(`[CombinatoricsAgent] 🎲 Executing Python combinatorial simulation script (Attempt ${attempt})...`);
+                toolResult = await this.codeExecutor.executeSymbolicMath(simScript);
+
+                const hasError = !toolResult.output || toolResult.output.includes('Traceback') || toolResult.output.includes('Error:');
+                if (!hasError) {
+                    this.logger.info(`[CombinatoricsAgent] Tool Output Verified:\n${toolResult.output?.slice(0, 200)}`);
+                    break;
+                }
+
+                this.logger.warn(`[CombinatoricsAgent] Python execution error on attempt ${attempt}. Initiating code repair loop...`);
+                simScript = await this._repairPythonScript(simScript, toolResult.output || toolResult.error);
+            }
         }
 
-        // Step 3: Deduce General Formula & Build Formal Proof
-        const proofResult = await this._generateCombinatoricsProof(promptText, toolResult.output);
+        const proofResult = await this._generateCombinatoricsProof(promptText, toolResult.output, simScript);
 
         return {
             agent: this.name,
@@ -56,9 +59,11 @@ export class CombinatoricsAgent {
     async _generateCombinatoricsScript(prompt) {
         const sysPrompt = `
 You are the Combinatorial Simulation Generator for CombinatoricsAgent in NeuroSyn-Math.
-Write a Python script using \`itertools\`, \`math.comb\`, or \`sympy.series\` to brute-force evaluate small values of n (e.g. n=1..10) or compute generating functions.
+Write a Python script using \`itertools\`, \`math.comb\`, or \`math.factorial\` to calculate the exact combinatorial answer or brute-force small values.
 
-Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
+⚡ CRITICAL PRECISION CONSTRAINTS:
+1. Use exact integer arithmetic (\`math.comb\`, \`math.factorial\`) without floating point precision loss.
+2. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
         try {
@@ -79,16 +84,51 @@ Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
         }
     }
 
-    async _generateCombinatoricsProof(prompt, toolOutput) {
+    async _repairPythonScript(badScript, errorMessage) {
+        const prompt = `Fix this Python script which failed during execution.
+
+Execution Error Output:
+\`\`\`
+${errorMessage}
+\`\`\`
+
+Script to Fix:
+\`\`\`python
+${badScript}
+\`\`\`
+
+Ensure you track exact integer calculations without floating point precision loss.
+Output ONLY the corrected valid \`\`\`python ... \`\`\` block.`;
+
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.0
+            });
+
+            const raw = res.choices[0].message.content;
+            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, badScript];
+            return match[1].trim();
+        } catch (e) {
+            return badScript;
+        }
+    }
+
+    async _generateCombinatoricsProof(prompt, toolOutput, verifiedScript) {
         const sysPrompt = `
 You are the NeuroSyn Combinatorics Specialist Agent.
-Provide a rigorous combinatorial proof (Induction, Invariant, or Double Counting) and a Lean 4 block.
-Use the small-n empirical sequence data calculated by the tool as proof ground truth.
+Generate a rigorous, publication-grade combinatorial proof and complete code implementation.
 
-Respond strictly in JSON:
+STRICT INSTRUCTIONS:
+1. Answer EVERY task and sub-question in the user prompt explicitly.
+2. Provide step-by-step combinatorial derivations, double-counting proofs, or recurrence relations.
+3. Embed the verified Python script below directly inside a complete \`\`\`python ... \`\`\` block in the "proofText" field. Do NOT write prose summaries of code.
+
+Respond strictly in valid JSON format:
 {
-  "proofText": "Full step-by-step combinatorial proof...",
-  "steps": ["Step 1...", "Step 2..."],
+  "proofText": "Full Markdown solution with rigorous derivation and complete copy-pasteable python code block...",
+  "steps": ["Step 1 derivation...", "Step 2 combinatorial proof...", "Step 3 code..."],
   "leanCode": "theorem combinatorics_target : ... := by ..."
 }
 `;
@@ -98,7 +138,7 @@ Respond strictly in JSON:
                 model: this.modelName,
                 messages: [
                     { role: 'system', content: sysPrompt },
-                    { role: 'user', content: `Problem: "${prompt}"\nSmall-N Tool Results:\n${toolOutput}` }
+                    { role: 'user', content: `Problem: "${prompt}"\nVerified Tool Output:\n${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\`` }
                 ],
                 response_format: { type: 'json_object' },
                 temperature: 0.1
