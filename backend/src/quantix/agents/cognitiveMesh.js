@@ -1,6 +1,6 @@
 /**
  * @file src/quantix/agents/cognitiveMesh.js
- * @description NeuroSyn Parallel Specialist Dispatcher with Timeout Safety & Model Routing.
+ * @description NeuroSyn Parallel Specialist Dispatcher (Uncapped Timeout for Local 32B Models).
  */
 
 import logger from '../../utils/logger.js';
@@ -11,8 +11,6 @@ import { NumberTheoryAgent } from './specialists/NumberTheoryAgent.js';
 import { CombinatoricsAgent } from './specialists/CombinatoricsAgent.js';
 import { AnalysisAgent } from './specialists/AnalysisAgent.js';
 import { LogicAgent } from './specialists/LogicAgent.js';
-
-const AGENT_TIMEOUT_MS = 120000; // ⚡ 120s limit to allow 32B models to write massive JSON math proofs
 
 export class CognitiveMesh {
     constructor({ clients, logger: appLogger = logger }) {
@@ -53,23 +51,13 @@ export class CognitiveMesh {
         const agent = this.specialists.get(primaryDomain) || this.specialists.get('Logic');
 
         try {
-            const result = await this._execWithTimeout(agent.think(task, context), AGENT_TIMEOUT_MS, agent.name);
+            // ⚡ FIX: Await the agent directly WITHOUT a timeout limit.
+            // This ensures local 32B models are never killed mid-thought.
+            const result = await agent.think(task, context);
             return result ? [result] : [];
         } catch (err) {
             this.logger.error(`[CognitiveMesh] Specialist ${agent.name} failed: ${err.message}`);
             return [];
         }
-    }
-
-    _execWithTimeout(promise, timeoutMs, agentName) {
-        return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-                reject(new Error(`Specialist ${agentName} timed out after ${timeoutMs / 1000}s`));
-            }, timeoutMs);
-
-            promise
-                .then(res => { clearTimeout(timer); resolve(res); })
-                .catch(err => { clearTimeout(timer); reject(err); });
-        });
     }
 }
