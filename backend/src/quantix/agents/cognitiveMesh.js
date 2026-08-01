@@ -46,31 +46,21 @@ export class CognitiveMesh {
 
     async execute(task, context, options = {}) {
         const targetDomains = options.domains || [context?.problem?.primaryDomain || 'Algebra'];
-        this.logger.info(`[CognitiveMesh] Dispatching task to domain specialists: [${targetDomains.join(', ')}]...`);
+        
+        // ⚡ OPTIMIZATION FOR LOCAL VRAM: 
+        // Focus VRAM compute on the Primary Domain Specialist to avoid GPU context-switching delays
+        const primaryDomain = targetDomains[0] || 'Algebra';
+        this.logger.info(`[CognitiveMesh] Dispatching primary task to domain specialist: [${primaryDomain}]...`);
 
-        const selectedAgents = [];
-        targetDomains.forEach(domain => {
-            if (this.specialists.has(domain)) {
-                selectedAgents.push(this.specialists.get(domain));
-            }
-        });
+        const agent = this.specialists.get(primaryDomain) || this.specialists.get('Logic');
 
-        if (selectedAgents.length === 0) {
-            selectedAgents.push(this.specialists.get('Logic'));
+        try {
+            const result = await this._execWithTimeout(agent.think(task, context), AGENT_TIMEOUT_MS, agent.name);
+            return result ? [result] : [];
+        } catch (err) {
+            this.logger.error(`[CognitiveMesh] Specialist ${agent.name} failed: ${err.message}`);
+            return [];
         }
-
-        const promises = selectedAgents.map(async (agent) => {
-            try {
-                const result = await this._execWithTimeout(agent.think(task, context), AGENT_TIMEOUT_MS, agent.name);
-                return result;
-            } catch (err) {
-                this.logger.error(`[CognitiveMesh] Specialist ${agent.name} failed: ${err.message}`);
-                return null;
-            }
-        });
-
-        const thoughts = await Promise.all(promises);
-        return thoughts.filter(t => t !== null);
     }
 
     _execWithTimeout(promise, timeoutMs, agentName) {
