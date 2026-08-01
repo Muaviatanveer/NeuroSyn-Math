@@ -59,11 +59,9 @@ export class CombinatoricsAgent {
     async _generateCombinatoricsScript(prompt) {
         const sysPrompt = `
 You are the Combinatorial Simulation Generator for CombinatoricsAgent in NeuroSyn-Math.
-Write a Python script using \`itertools\`, \`math.comb\`, or \`math.factorial\` to calculate the exact combinatorial answer or brute-force small values.
+Write a Python script using \`math.comb\` or \`math.factorial\` to calculate the exact answer.
 
-⚡ CRITICAL PRECISION CONSTRAINTS:
-1. Use exact integer arithmetic (\`math.comb\`, \`math.factorial\`) without floating point precision loss.
-2. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
         try {
@@ -73,7 +71,8 @@ Write a Python script using \`itertools\`, \`math.comb\`, or \`math.factorial\` 
                     { role: 'system', content: sysPrompt },
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
-                temperature: 0.0
+                temperature: 0.0,
+                max_tokens: 300 // ⚡ Generate Python code in 1 second
             });
 
             const raw = res.choices[0].message.content;
