@@ -1,6 +1,6 @@
 {
     "name": "neurosyn-math",
-    "version": "1.0.13",
+    "version": "1.0.14",
     "description": "Hybrid Mathematical Intelligence System (Symbolic + Neural + Formal Verification)",
     "type": "module",
     "main": "cli.js",
