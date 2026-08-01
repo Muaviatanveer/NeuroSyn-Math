@@ -1,0 +1,113 @@
+/**
+ * @file LogicAgent.js
+ * @description Dedicated Logic Specialist Agent for NeuroSyn-Math.
+ * Handles Quantifiers, Proof Transformations, Natural Deduction, Proof by Contradiction, and Induction.
+ * Uses Z3 SMT Solver as an external tool to check formal proposition satisfiability (SAT / UNSAT).
+ */
+
+import { CodeExecutorService } from '../../../services/codeExecutorService.js';
+import logger from '../../../utils/logger.js';
+
+export class LogicAgent {
+    constructor({ client, modelName = 'gpt-4o', logger: appLogger = logger }) {
+        if (!client) {
+            throw new Error('[LogicAgent] Requires a valid LLM client.');
+        }
+        this.name = 'LogicAgent';
+        this.client = client;
+        this.modelName = modelName;
+        this.logger = appLogger;
+        this.codeExecutor = new CodeExecutorService();
+        this.capabilities = ['logic', 'quantifiers', 'proof_by_contradiction', 'induction', 'z3_sat_tools'];
+    }
+
+    /**
+     * Executes logic transformation using Z3 SMT proposition checking.
+     */
+    async think(task, context = {}) {
+        const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
+        this.logger.info(`[LogicAgent] Processing logical reasoning task: "${promptText.slice(0, 80)}..."`);
+
+        // Step 1: Generate Z3 SMT Proposition Script
+        const z3Script = await this._generateZ3LogicScript(promptText);
+
+        // Step 2: Execute Z3 SMT Proposition Check
+        let toolResult = { output: 'Tool execution skipped.', success: true };
+        if (z3Script) {
+            this.logger.info('[LogicAgent] ⚖️ Executing Z3 SMT logic tool script...');
+            toolResult = await this.codeExecutor.executeSymbolicMath(z3Script, ['z3-solver']);
+            this.logger.info(`[LogicAgent] Z3 Output:\n${toolResult.output?.slice(0, 200)}`);
+        }
+
+        // Step 3: Produce Formal Natural Deduction Proof + Lean Code
+        const proofResult = await this._generateLogicProof(promptText, toolResult.output);
+
+        return {
+            agent: this.name,
+            domain: 'Logic',
+            script: z3Script,
+            toolOutput: toolResult.output,
+            content: proofResult.proofText,
+            proofSteps: proofResult.steps || [proofResult.proofText],
+            leanCode: proofResult.leanCode || ''
+        };
+    }
+
+    async _generateZ3LogicScript(prompt) {
+        const sysPrompt = `
+You are the Z3 Logic Script Generator for LogicAgent in NeuroSyn-Math.
+Write a Python script using \`z3\` (\`Solver\`, \`Bool\`, \`And\`, \`Or\`, \`Not\`, \`Implies\`)
+to check if assuming the negation of the goal leads to UNSAT (Proof by Contradiction).
+
+Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
+`;
+
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: `Problem: "${prompt}"` }
+                ],
+                temperature: 0.0
+            });
+
+            const raw = res.choices[0].message.content;
+            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
+            return match[1].trim();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async _generateLogicProof(prompt, toolOutput) {
+        const sysPrompt = `
+You are the NeuroSyn Logic Specialist Agent.
+Provide a natural deduction or proof by contradiction step graph and a Lean 4 tactic block.
+Incorporate the Z3 SMT SAT/UNSAT result as formal proof logic.
+
+Respond strictly in JSON:
+{
+  "proofText": "Full step-by-step natural deduction proof...",
+  "steps": ["Step 1...", "Step 2..."],
+  "leanCode": "theorem logic_target : ... := by ..."
+}
+`;
+
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: `Problem: "${prompt}"\nZ3 Output:\n${toolOutput}` }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.1
+            });
+
+            return JSON.parse(res.choices[0].message.content);
+        } catch (e) {
+            return { proofText: 'Logic proof fallback.', steps: [prompt], leanCode: '' };
+        }
+    }
+}

@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Environment Keys & Logs
+.env
+*.log
+backend.log
+~/.neurosyn/
+
+# Local Memory & DBs
+quantix_memory.db.json
+*.db
+
+# macOS System Files
+.DS_Store

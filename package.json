@@ -1,0 +1,42 @@
+{
+    "name": "neurosyn-math",
+    "version": "1.0.0",
+    "description": "Hybrid Mathematical Intelligence System (Symbolic + Neural + Formal Verification)",
+    "type": "module",
+    "main": "cli.js",
+    "bin": {
+        "neurosyn-math": "./cli.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Muaviatanveer/NeuroSyn-Math.git"
+    },
+    "author": "Muavia Tanveer",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/Muaviatanveer/NeuroSyn-Math/issues"
+    },
+    "homepage": "https://github.com/Muaviatanveer/NeuroSyn-Math#readme",
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.20.0",
+        "@google/generative-ai": "^0.1.0",
+        "boxen": "^8.0.1",
+        "chalk": "^5.6.2",
+        "cli-table3": "^0.6.5",
+        "dockerode": "^4.0.2",
+        "dotenv": "^16.4.5",
+        "fs-extra": "^11.2.0",
+        "ink": "^5.0.1",
+        "ink-spinner": "^5.0.0",
+        "ink-text-input": "^6.0.0",
+        "lowdb": "^7.0.1",
+        "mathjs": "^12.4.1",
+        "mongoose": "^9.8.1",
+        "neo-blessed": "^0.2.0",
+        "openai": "^4.40.0",
+        "ora": "^8.0.1",
+        "pdfkit": "^0.15.2",
+        "react": "^18.3.1",
+        "uuid": "^9.0.1"
+    }
+}
