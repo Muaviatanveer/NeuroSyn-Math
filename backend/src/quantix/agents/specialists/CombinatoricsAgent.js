@@ -78,7 +78,7 @@ Write a standalone Python script using \`math.comb\` or \`math.factorial\` to ca
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
                 temperature: 0.0,
-                max_tokens: 300
+                max_tokens: 1000
             });
 
             const raw = res.choices[0].message.content;
@@ -110,7 +110,7 @@ Output ONLY the corrected valid \`\`\`python ... \`\`\` block.`;
                 model: this.modelName,
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.0,
-                max_tokens: 300
+                max_tokens: 1000
             });
 
             const raw = res.choices[0].message.content;

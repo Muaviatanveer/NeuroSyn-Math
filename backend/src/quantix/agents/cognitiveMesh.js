@@ -12,7 +12,7 @@ import { CombinatoricsAgent } from './specialists/CombinatoricsAgent.js';
 import { AnalysisAgent } from './specialists/AnalysisAgent.js';
 import { LogicAgent } from './specialists/LogicAgent.js';
 
-const AGENT_TIMEOUT_MS = 50000; // ⚡ Increased to 50s hard limit for local 32B models
+const AGENT_TIMEOUT_MS = 65000; // ⚡ Increased to 65s hard limit for local 32B models
 
 export class CognitiveMesh {
     constructor({ clients, logger: appLogger = logger }) {
