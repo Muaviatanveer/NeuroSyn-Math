@@ -1,7 +1,7 @@
 /**
  * @file backend/src/config/clients.js
  * @description Centralized AI Client & Model Router for NeuroSyn-Math.
- * Fixes cloud API vs local Ollama model routing.
+ * Fixes cloud API vs local Ollama model routing defaults for npx runs.
  */
 
 import OpenAI from 'openai';
@@ -13,7 +13,7 @@ export const MODELS = {
     get LOCAL_CODE_SPECIALIST() { return process.env.LOCAL_CODE_MODEL || 'qwen2.5-coder:32b'; },
     get LOCAL_EMBEDDINGS() { return process.env.LOCAL_EMBEDDING_MODEL || 'nomic-embed-text:latest'; },
     get OPENAI_GPT4O() { return process.env.OPENAI_MODEL || 'gpt-4o'; },
-    get DEEPSEEK_CLOUD_REASONER() { return process.env.DEEPSEEK_MODEL || 'deepseek-chat'; }
+    get DEEPSEEK_CLOUD_REASONER() { return process.env.DEEPSEEK_MODEL || 'deepseek-r1:32b'; }
 };
 
 class ClientRegistry {
@@ -25,7 +25,7 @@ class ClientRegistry {
         const baseUrl = this.clientBaseUrl;
         const clients = {};
 
-        // 1. Ollama / Colab Client with Ngrok Bypass Header
+        // 1. Ollama Local Client
         clients.ollama = new OpenAI({
             apiKey: 'ollama-local',
             baseURL: baseUrl,
@@ -35,15 +35,16 @@ class ClientRegistry {
             }
         });
 
-        // 2. OpenAI Client (Cloud API)
+        // 2. OpenAI Client (Cloud API or Local Fallback)
         if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('your_')) {
             clients.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         } else {
             clients.openai = clients.ollama;
         }
 
-        // 3. DeepSeek Client (Uses Colab Ollama or Cloud DeepSeek)
-        if (process.env.USE_LOCAL_DEEPSEEK === 'true' || !process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY.includes('your_')) {
+        // 3. DeepSeek Client (Uses Local Ollama unless valid Cloud API key is set)
+        const hasValidDeepseekKey = process.env.DEEPSEEK_API_KEY && !process.env.DEEPSEEK_API_KEY.includes('your_');
+        if (!hasValidDeepseekKey || process.env.USE_LOCAL_DEEPSEEK === 'true') {
             clients.deepseek = clients.ollama;
         } else {
             clients.deepseek = new OpenAI({
@@ -61,15 +62,19 @@ class ClientRegistry {
     }
 
     getModelForRole(role) {
+        const hasValidDeepseekKey = process.env.DEEPSEEK_API_KEY && !process.env.DEEPSEEK_API_KEY.includes('your_');
+        const isLocalDeepseek = process.env.USE_LOCAL_DEEPSEEK === 'true' || !hasValidDeepseekKey;
+
         switch (role) {
             case 'math_reasoning':
-                return process.env.USE_LOCAL_DEEPSEEK === 'true' ? MODELS.LOCAL_MATH_REASONER : MODELS.DEEPSEEK_CLOUD_REASONER;
+            case 'fast_parser':
+                return isLocalDeepseek ? MODELS.LOCAL_MATH_REASONER : MODELS.DEEPSEEK_CLOUD_REASONER;
             case 'code_synthesis':
-                return process.env.USE_LOCAL_CODE === 'true' ? MODELS.LOCAL_CODE_SPECIALIST : MODELS.OPENAI_GPT4O;
+                return process.env.USE_LOCAL_CODE === 'true' ? MODELS.LOCAL_CODE_SPECIALIST : MODELS.LOCAL_MATH_REASONER;
             case 'embeddings':
                 return process.env.USE_LOCAL_EMBEDDINGS === 'true' ? MODELS.LOCAL_EMBEDDINGS : 'text-embedding-3-large';
             default:
-                return MODELS.OPENAI_GPT4O;
+                return MODELS.LOCAL_MATH_REASONER;
         }
     }
 }

@@ -51,8 +51,14 @@ logger.error = (msg) => {
 };
 logger.debug = (msg) => writeToFile('debug', msg);
 
+// Load local .env or fallback to ~/.neurosyn/.env
 if (fs.existsSync('.env')) {
     process.loadEnvFile('.env');
+} else {
+    const homeEnv = path.join(os.homedir(), '.neurosyn', '.env');
+    if (fs.existsSync(homeEnv)) {
+        process.loadEnvFile(homeEnv);
+    }
 }
 
 const writeLine = (str = '') => process.stdout.write(`${str}\n`);
