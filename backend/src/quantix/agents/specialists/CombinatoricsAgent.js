@@ -59,9 +59,11 @@ export class CombinatoricsAgent {
     async _generateCombinatoricsScript(prompt) {
         const sysPrompt = `
 You are the Combinatorial Simulation Generator for CombinatoricsAgent in NeuroSyn-Math.
-Write a Python script using \`math.comb\` or \`math.factorial\` to calculate the exact answer.
+Write a standalone Python script using \`math.comb\` or \`math.factorial\` to calculate the exact combinatorial answer.
 
-Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+⚡ STRICT INSTRUCTIONS:
+1. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+2. DO NOT output reasoning tags (<think>...</think>) or text before the code block.
 `;
 
         try {
@@ -72,7 +74,7 @@ Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
                 temperature: 0.0,
-                max_tokens: 300 // ⚡ Generate Python code in 1 second
+                max_tokens: 300
             });
 
             const raw = res.choices[0].message.content;
@@ -103,7 +105,8 @@ Output ONLY the corrected valid \`\`\`python ... \`\`\` block.`;
             const res = await this.client.chat.completions.create({
                 model: this.modelName,
                 messages: [{ role: 'user', content: prompt }],
-                temperature: 0.0
+                temperature: 0.0,
+                max_tokens: 300
             });
 
             const raw = res.choices[0].message.content;
