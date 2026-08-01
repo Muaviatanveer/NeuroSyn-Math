@@ -16,7 +16,7 @@ export class MultiCriticPanel {
         this.batchSize = 3;
     }
 
-    async evaluate(thoughts, problemContext) {
+    async evaluate(thoughts, problemContext, stream = () => {}) {
         this.logger.info(`[NeuroSyn Critic] Assembling Metacognitive Panel to review ${thoughts.length} steps...`);
         if (!thoughts || thoughts.length === 0) {
             return this._handleEmptyThoughts();
@@ -36,12 +36,20 @@ export class MultiCriticPanel {
                     model: this.model,
                     messages: [{ role: 'user', content: prompt }],
                     response_format: { type: 'json_object' },
-                    temperature: 0.1
+                    temperature: 0.1,
+                    stream: true // ⚡ Enable Critic live streaming!
                 });
 
-                const content = response?.choices?.[0]?.message?.content;
-                if (!content) throw new Error("Empty response from Metacognitive Critic.");
+                let content = '';
+                for await (const chunk of response) {
+                    const token = chunk.choices[0]?.delta?.content || '';
+                    content += token;
+                    if (token && typeof stream === 'function') {
+                        stream('token', { agent: 'MultiCriticPanel', token }); // ⚡ Stream token to CLI
+                    }
+                }
 
+                if (!content) throw new Error("Empty response from Metacognitive Critic.");
                 const partial = JSON.parse(content);
                 if (Array.isArray(partial.verdicts)) {
                     allVerdicts.push(...partial.verdicts);

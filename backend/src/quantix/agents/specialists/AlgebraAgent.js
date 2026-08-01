@@ -1,5 +1,6 @@
 /**
- * @file src/quantix/agents/specialists/AlgebraAgent.js
+ * @file AlgebraAgent.js
+ * @description Dedicated Algebra Specialist Agent with Live Token Streaming & Auto-Correction.
  */
 import { CodeExecutorService } from '../../../services/codeExecutorService.js';
 import logger from '../../../utils/logger.js';
@@ -17,41 +18,11 @@ export class AlgebraAgent {
         this.capabilities = ['algebra', 'group_theory', 'polynomials', 'linear_algebra', 'sympy_tools'];
     }
 
-    async _streamLLM(sysPrompt, userPrompt, stream, agentName, temp = 0.1, maxTokens = null) {
-        try {
-            const options = {
-                model: this.modelName,
-                messages: [
-                    { role: 'system', content: sysPrompt },
-                    { role: 'user', content: userPrompt }
-                ],
-                temperature: temp,
-                stream: true
-            };
-            if (maxTokens) {
-                options.max_tokens = maxTokens;
-            }
-            const res = await this.client.chat.completions.create(options);
-
-            let fullText = '';
-            for await (const chunk of res) {
-                const token = chunk.choices[0]?.delta?.content || '';
-                fullText += token;
-                if (token && typeof stream === 'function') {
-                    stream('token', { agent: agentName, token });
-                }
-            }
-            return fullText;
-        } catch (e) {
-            return null;
-        }
-    }
-
     async think(task, context = {}, stream = () => {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[AlgebraAgent] Processing algebraic task: "${promptText.slice(0, 80)}..."`);
 
-        const sympyScript = await this._generateSymPyScript(promptText, context, stream);
+        let sympyScript = await this._generateSymPyScript(promptText, context, stream);
 
         let toolExecutionResult = { output: 'Tool execution bypassed.', success: true };
         if (sympyScript) {
@@ -77,38 +48,78 @@ export class AlgebraAgent {
         const sysPrompt = `
 You are the SymPy Code Generator for AlgebraAgent in NeuroSyn-Math.
 Write a standalone Python script using SymPy to simplify, solve, or verify the algebraic statement.
-Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
+Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
-        const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
-        if (!fullContent) return null;
-        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
-        return match[1].trim();
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: `Problem: "${prompt}"` }
+                ],
+                temperature: 0.0,
+                stream: true // ⚡ Stream live tokens!
+            });
+
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
+
+            const match = fullText.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullText];
+            return match[1].trim();
+        } catch (e) {
+            return null;
+        }
     }
 
     async _generateVerifiedProof(prompt, toolOutput, context, stream) {
         const sysPrompt = `
-You are the NeuroSyn Algebra Specialist.
-Generate a rigorous step-by-step algebraic proof.
+You are the NeuroSyn Algebra Specialist Agent.
+Generate a rigorous step-by-step algebraic proof and complete code implementation.
 
 STRICT INSTRUCTIONS:
-1. Provide step-by-step algebraic derivations and proofs.
-2. Embed the verified Python script below directly inside a \`\`\`python ... \`\`\` block.
-3. DO NOT output JSON. Output raw Markdown text.
+1. Answer EVERY task and sub-question in the user prompt explicitly.
+2. Include complete equations, step-by-step derivations, and proofs.
+3. Include a complete, production-grade \`\`\`python ... \`\`\` script. Do NOT write summaries.
+
+Respond strictly in JSON format:
+{
+  "proofText": "Full pedagogical proof text including markdown and complete python code blocks...",
+  "steps": ["Step 1...", "Step 2..."],
+  "leanCode": "theorem algebra_target : ... := by ..."
+}
 `;
 
-        const userPrompt = `Problem: "${prompt}"\nSymPy Tool Execution Output:\n${toolOutput}`;
-        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1);
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: `Problem: "${prompt}"\nSymPy Tool Execution Output:\n${toolOutput}` }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.1,
+                stream: true // ⚡ Stream live proof generation!
+            });
 
-        // Clean the <think> tags out of the raw text
-        let rawText = fullContent || '';
-        rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
 
-        // Construct the JSON object manually to prevent LLM parsing failures!
-        return {
-            proofText: rawText || 'Algebraic proof derived successfully.',
-            steps: [rawText.slice(0, 100) + '...'],
-            leanCode: ''
-        };
+            return JSON.parse(fullText);
+        } catch (e) {
+            return { proofText: 'Proof generation fallback.', steps: [prompt], leanCode: '' };
+        }
     }
 }

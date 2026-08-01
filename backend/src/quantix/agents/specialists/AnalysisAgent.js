@@ -1,10 +1,7 @@
 /**
  * @file AnalysisAgent.js
- * @description Dedicated Analysis Specialist Agent for NeuroSyn-Math.
- * Handles Calculus, Limits, Integrals, Series, Real/Complex Analysis, and Inequalities.
- * Uses SymPy Calculus & SciPy tools to compute exact derivatives, integrals, and series expansions.
+ * @description Dedicated Analysis Specialist Agent with Live Token Streaming & Auto-Correction.
  */
-
 import { CodeExecutorService } from '../../../services/codeExecutorService.js';
 import logger from '../../../utils/logger.js';
 
@@ -21,17 +18,12 @@ export class AnalysisAgent {
         this.capabilities = ['analysis', 'calculus', 'limits', 'integrals', 'differential_equations', 'inequalities', 'sympy_calculus_tools'];
     }
 
-    /**
-     * Executes real analysis proof search using SymPy calculus execution.
-     */
-    async think(task, context = {}) {
+    async think(task, context = {}, stream = () => {}) {
         const promptText = typeof task === 'string' ? task : (task.prompt || task.goal || JSON.stringify(task));
         this.logger.info(`[AnalysisAgent] Processing calculus/analysis task: "${promptText.slice(0, 80)}..."`);
 
-        // Step 1: Generate SymPy Calculus Script
-        const calculusScript = await this._generateCalculusScript(promptText);
+        const calculusScript = await this._generateCalculusScript(promptText, stream);
 
-        // Step 2: Execute SymPy Integration / Limit / Inequality Tool
         let toolResult = { output: 'Tool execution skipped.', success: true };
         if (calculusScript) {
             this.logger.info('[AnalysisAgent] 📈 Executing SymPy Calculus tool script...');
@@ -39,8 +31,7 @@ export class AnalysisAgent {
             this.logger.info(`[AnalysisAgent] Tool Output:\n${toolResult.output?.slice(0, 200)}`);
         }
 
-        // Step 3: Produce Formal Analytical Proof + Lean 4 Code
-        const proofResult = await this._generateAnalysisProof(promptText, toolResult.output);
+        const proofResult = await this._generateAnalysisProof(promptText, toolResult.output, stream);
 
         return {
             agent: this.name,
@@ -53,7 +44,7 @@ export class AnalysisAgent {
         };
     }
 
-    async _generateCalculusScript(prompt) {
+    async _generateCalculusScript(prompt, stream) {
         const sysPrompt = `
 You are the SymPy Calculus Tool Generator for AnalysisAgent in NeuroSyn-Math.
 Write a standalone Python script using \`sympy\` (\`limit\`, \`diff\`, \`integrate\`, \`dsolve\`, \`series\`)
@@ -69,18 +60,27 @@ Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
                     { role: 'system', content: sysPrompt },
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
-                temperature: 0.0
+                temperature: 0.0,
+                stream: true
             });
 
-            const raw = res.choices[0].message.content;
-            const match = raw.match(/```python\s*([\s\S]*?)\s*```/) || [null, raw];
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
+
+            const match = fullText.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullText];
             return match[1].trim();
         } catch (e) {
             return null;
         }
     }
 
-    async _generateAnalysisProof(prompt, toolOutput) {
+    async _generateAnalysisProof(prompt, toolOutput, stream) {
         const sysPrompt = `
 You are the NeuroSyn Analysis Specialist Agent.
 Provide an epsilon-delta or symbolic analysis proof and Lean 4 tactic block.
@@ -102,10 +102,20 @@ Respond strictly in JSON:
                     { role: 'user', content: `Problem: "${prompt}"\nSymPy Output:\n${toolOutput}` }
                 ],
                 response_format: { type: 'json_object' },
-                temperature: 0.1
+                temperature: 0.1,
+                stream: true
             });
 
-            return JSON.parse(res.choices[0].message.content);
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
+
+            return JSON.parse(fullText);
         } catch (e) {
             return { proofText: 'Analysis proof fallback.', steps: [prompt], leanCode: '' };
         }
