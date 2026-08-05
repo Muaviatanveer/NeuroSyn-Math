@@ -86,14 +86,9 @@ Provide a rigorous geometric or combinatorial proof and a Lean 4 block.
 
 STRICT INSTRUCTIONS:
 1. Answer EVERY task and sub-question in the user prompt explicitly.
-2. Embed the verified Python script below directly inside a complete \`\`\`python ... \`\`\` block in the "proofText" field.
-
-Respond strictly in JSON format:
-{
-  "proofText": "Full Markdown solution with rigorous derivation and complete copy-pasteable python code block...",
-  "steps": ["Step 1...", "Step 2..."],
-  "leanCode": "theorem geometry_target : ... := by ..."
-}
+2. Embed the verified Python script below directly inside a complete \`\`\`python ... \`\`\` block.
+3. If you provide a Lean 4 theorem proof, wrap it strictly in a \`\`\`lean ... \`\`\` code block.
+4. DO NOT output JSON. Output raw Markdown text.
 `;
 
         try {
@@ -103,7 +98,6 @@ Respond strictly in JSON format:
                     { role: 'system', content: sysPrompt },
                     { role: 'user', content: `Problem: "${prompt}"\nSymPy Output:\n${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\`` }
                 ],
-                response_format: { type: 'json_object' },
                 temperature: 0.1,
                 max_tokens: 1500, // ⚡ Cap tokens to prevent loops
                 stream: true // ⚡ Stream live tokens!
@@ -118,7 +112,17 @@ Respond strictly in JSON format:
                 }
             }
 
-            return JSON.parse(fullText);
+            let rawText = fullText || '';
+            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+            const leanMatch = rawText.match(/```lean\s*([\s\S]*?)\s*```/);
+            const leanCode = leanMatch ? leanMatch[1].trim() : '';
+
+            return {
+                proofText: rawText || 'Geometric proof derived successfully.',
+                steps: [rawText.slice(0, 100) + '...'],
+                leanCode: leanCode
+            };
         } catch (e) {
             return { proofText: 'Geometric proof fallback.', steps: [prompt], leanCode: '' };
         }

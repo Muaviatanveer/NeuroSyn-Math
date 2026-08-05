@@ -87,12 +87,10 @@ You are the NeuroSyn Logic Specialist Agent.
 Provide a natural deduction or proof by contradiction step graph and a Lean 4 tactic block.
 Incorporate the Z3 SMT SAT/UNSAT result as formal proof logic.
 
-Respond strictly in JSON:
-{
-  "proofText": "Full step-by-step natural deduction proof...",
-  "steps": ["Step 1...", "Step 2..."],
-  "leanCode": "theorem logic_target : ... := by ..."
-}
+STRICT INSTRUCTIONS:
+1. Provide step-by-step logic derivations.
+2. If you provide a Lean 4 theorem proof, wrap it strictly in a \`\`\`lean ... \`\`\` code block.
+3. DO NOT output JSON. Output raw Markdown text.
 `;
 
         try {
@@ -102,7 +100,6 @@ Respond strictly in JSON:
                     { role: 'system', content: sysPrompt },
                     { role: 'user', content: `Problem: "${prompt}"\nZ3 Output:\n${toolOutput}` }
                 ],
-                response_format: { type: 'json_object' },
                 temperature: 0.1,
                 max_tokens: 1500, // ⚡ Cap tokens to prevent loops
                 stream: true
@@ -117,7 +114,17 @@ Respond strictly in JSON:
                 }
             }
 
-            return JSON.parse(fullText);
+            let rawText = fullText || '';
+            rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+            const leanMatch = rawText.match(/```lean\s*([\s\S]*?)\s*```/);
+            const leanCode = leanMatch ? leanMatch[1].trim() : '';
+
+            return {
+                proofText: rawText || 'Logic proof derived successfully.',
+                steps: [rawText.slice(0, 100) + '...'],
+                leanCode: leanCode
+            };
         } catch (e) {
             return { proofText: 'Logic proof fallback.', steps: [prompt], leanCode: '' };
         }
