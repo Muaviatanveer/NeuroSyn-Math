@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/neurosyn_math';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/neurosyn_math';
 
 // 1. USER SCHEMA
 const userSchema = new mongoose.Schema({
