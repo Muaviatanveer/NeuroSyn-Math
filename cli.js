@@ -434,7 +434,7 @@ async function startREPL() {
 
             isProcessing = false;
             rl.prompt();
-        }, 150);
+        }, 500);
     });
 }
 

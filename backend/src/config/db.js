@@ -52,7 +52,15 @@ export class DatabaseService {
     async connect() {
         if (this.isConnected) return true;
         try {
-            await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
+            const connectPromise = mongoose.connect(MONGODB_URI, { 
+                serverSelectionTimeoutMS: 3000, 
+                connectTimeoutMS: 3000,
+                family: 4 
+            });
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('MongoDB Connection Timeout')), 3000));
+            
+            await Promise.race([connectPromise, timeoutPromise]);
+            
             this.isConnected = true;
             logger.info(`[MongoDB] Connected to local database at: ${MONGODB_URI}`);
             return true;
