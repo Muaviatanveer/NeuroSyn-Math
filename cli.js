@@ -348,7 +348,7 @@ async function startREPL() {
 
     rl.prompt();
 
-    rl.on('line', (line) => {
+    rl.on('line', async (line) => {
         if (isProcessing) return;
 
         let cleanLine = line.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
@@ -356,7 +356,6 @@ async function startREPL() {
         // Multiline support: if line ends with '\', continue reading
         if (cleanLine.trim().endsWith('\\')) {
             inputBuffer.push(cleanLine.replace(/\\$/, ''));
-            clearTimeout(pasteTimeout);
             const th = getTheme();
             rl.setPrompt(th.accent('... '));
             rl.prompt();
@@ -364,92 +363,86 @@ async function startREPL() {
         }
 
         inputBuffer.push(cleanLine);
-        clearTimeout(pasteTimeout);
+        const input = inputBuffer.join('\n').trim();
+        inputBuffer = [];
+        const th = getTheme();
 
-        rl.setPrompt('');
+        rl.setPrompt(th.promptColor('NeuroSyn ❯ '));
 
-        pasteTimeout = setTimeout(async () => {
-            const input = inputBuffer.join('\n').trim();
-            inputBuffer = [];
-            const th = getTheme();
+        if (!input) { rl.prompt(); return; }
+        if (input.startsWith('/')) { await handleCommand(input); rl.prompt(); return; }
 
-            rl.setPrompt(th.promptColor('NeuroSyn ❯ '));
+        isProcessing = true;
+        writeLine();
 
-            if (!input) { rl.prompt(); return; }
-            if (input.startsWith('/')) { await handleCommand(input); rl.prompt(); return; }
+        const startMs = performance.now();
 
-            isProcessing = true;
-            writeLine();
+        const spinner = ora({ text: th.info('Initiating...'), color: 'cyan', indent: 2 }).start();
 
-            const startMs = performance.now();
-
-            const spinner = ora({ text: th.info('Initiating...'), color: 'cyan', indent: 2 }).start();
-
-            let timer = setInterval(() => {
-                const elapSec = (performance.now() - startMs) / 1000;
-                const elap = elapSec.toFixed(1);
-                
-                let currentText = spinner.text.replace(/ \[\d+\.\ds\]$/, '').replace(/ - (Model is processing context|Model is generating deep).*$/, '');
-                
-                if (!activeAgentStream && elapSec > 15) {
-                    if (elapSec > 120) {
-                        currentText += ' - Model is generating deep reasoning...';
-                    } else {
-                        currentText += ' - Model is processing context (Prompt Evaluation)...';
-                    }
+        let timer = setInterval(() => {
+            const elapSec = (performance.now() - startMs) / 1000;
+            const elap = elapSec.toFixed(1);
+            
+            let currentText = spinner.text.replace(/ \[\d+\.\ds\]$/, '').replace(/ - (Model is processing context|Model is generating deep).*$/, '');
+            
+            if (!activeAgentStream && elapSec > 15) {
+                if (elapSec > 120) {
+                    currentText += ' - Model is generating deep reasoning...';
+                } else {
+                    currentText += ' - Model is processing context (Prompt Evaluation)...';
                 }
-                
-                spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
-            }, 500);
-
-            let activeAgentStream = null;
-
-            const streamHandler = (type, data) => {
-                if (type === 'status') {
-                    if (activeAgentStream) {
-                        writeLine();
-                        activeAgentStream = null;
-                        spinner.start();
-                    }
-                    const msg = data.message.replace(/\[.*?\]/, '').trim();
-                    const cleanMsg = msg.length > 70 ? msg.slice(0, 67) + '...' : msg;
-                    spinner.text = th.info(`⚡ ${cleanMsg}`);
-                } else if (type === 'token') {
-                    const agentName = typeof data === 'object' ? (data.agent || 'Agent') : 'Thinking';
-                    const tokenStr = typeof data === 'object' ? (data.token || '') : String(data);
-
-                    if (activeAgentStream !== agentName) {
-                        if (activeAgentStream) writeLine();
-                        spinner.stop();
-                        writeLine();
-                        process.stdout.write(`  ${th.accent.bold(`🧠 [${agentName}]`)}: `);
-                        activeAgentStream = agentName;
-                    }
-
-                    process.stdout.write(th.muted(tokenStr));
-                    fs.appendFileSync(LOG_FILE, tokenStr, 'utf8');
-                }
-            };
-
-            try {
-                const result = await backend.processPrompt(input, { sendStreamData: streamHandler, userId: activeUser?.username });
-                clearInterval(timer);
-                const elapsed = ((performance.now() - startMs) / 1000).toFixed(2);
-
-                spinner.succeed(` ${th.success.bold('Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
-                await dbService.saveHistory(activeUser, input, result, elapsed);
-
-                renderResultCard(input, result, elapsed);
-            } catch (err) {
-                clearInterval(timer);
-                spinner.fail(` ${th.error.bold('Error:')} ${err.message}`);
-                writeLine();
             }
-
-            isProcessing = false;
-            writeLine();
-            rl.prompt();
+            
+            spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
         }, 500);
+
+        let activeAgentStream = null;
+
+        const streamHandler = (type, data) => {
+            if (type === 'status') {
+                if (activeAgentStream) {
+                    writeLine();
+                    activeAgentStream = null;
+                    spinner.start();
+                }
+                const msg = data.message.replace(/\[.*?\]/, '').trim();
+                const cleanMsg = msg.length > 70 ? msg.slice(0, 67) + '...' : msg;
+                spinner.text = th.info(`⚡ ${cleanMsg}`);
+            } else if (type === 'token') {
+                const agentName = typeof data === 'object' ? (data.agent || 'Agent') : 'Thinking';
+                const tokenStr = typeof data === 'object' ? (data.token || '') : String(data);
+
+                if (activeAgentStream !== agentName) {
+                    if (activeAgentStream) writeLine();
+                    spinner.stop();
+                    writeLine();
+                    process.stdout.write(`  ${th.accent.bold(`🧠 [${agentName}]`)}: `);
+                    activeAgentStream = agentName;
+                }
+
+                process.stdout.write(th.muted(tokenStr));
+                fs.appendFileSync(LOG_FILE, tokenStr, 'utf8');
+            }
+        };
+
+        try {
+            const result = await backend.processPrompt(input, { sendStreamData: streamHandler, userId: activeUser?.username });
+            clearInterval(timer);
+            const elapsed = ((performance.now() - startMs) / 1000).toFixed(2);
+
+            spinner.succeed(` ${th.success.bold('Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
+            await dbService.saveHistory(activeUser, input, result, elapsed);
+
+            renderResultCard(input, result, elapsed);
+        } catch (err) {
+            clearInterval(timer);
+            spinner.fail(` ${th.error.bold('Error:')} ${err.message}`);
+            writeLine();
+        }
+
+        isProcessing = false;
+        writeLine();
+        rl.prompt();
     });
 }
 
