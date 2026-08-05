@@ -5,11 +5,6 @@
  */
 
 process.noDeprecation = true;
-process.stdout.write('\x1b[?2004h'); // Enable Bracketed Paste Mode
-
-process.on('exit', () => {
-    process.stdout.write('\x1b[?2004l');
-});
 
 import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first'); // ⚡ Universal Windows/Mac IPv6 fallback fix
@@ -200,47 +195,65 @@ function printMinimalHeader() {
     writeLine();
 }
 
+function getDomainEmoji(domain) {
+    const d = (domain || '').toLowerCase();
+    if (d.includes('algebra')) return '🧮';
+    if (d.includes('geometry')) return '📐';
+    if (d.includes('number theory')) return '🔢';
+    if (d.includes('combinatorics')) return '🎲';
+    if (d.includes('logic')) return '🧠';
+    if (d.includes('calculus') || d.includes('analysis')) return '📈';
+    return '🔬';
+}
+
 function renderResultCard(problemText, result, elapsed) {
     const th = getTheme();
     const confidencePct = ((result.confidence || 0) * 100).toFixed(1);
     const verified = result.verifiedInLean;
-    const separator = th.muted('  ────────────────────────────────────────────────────────────────────────────');
+    const domain = result.primaryDomain || 'Algebra';
+    const domainEmoji = getDomainEmoji(domain);
 
-    writeLine();
-    writeLine(separator);
-    writeLine(`  ${th.primary.bold('◆ PROBLEM')}`);
-    writeLine(`  ${th.text(problemText)}`);
-    writeLine(separator);
+    let contentStr = '';
+    contentStr += `${th.primary.bold('◆ PROBLEM')}\n`;
+    contentStr += `${th.text(problemText)}\n\n`;
 
-    writeLine(`  ${th.primary.bold('◆ MATHEMATICAL SOLUTION')}`);
+    contentStr += `${th.primary.bold('◆ MATHEMATICAL SOLUTION')}\n`;
     const solText = result.explanation?.undergraduate || result.finalResponse || 'Proof complete.';
 
     solText.split('\n').forEach(line => {
         const trimmed = line.trim();
         if (trimmed.startsWith('#')) {
-            writeLine(`  ${th.accent.bold(line)}`);
+            contentStr += `${th.accent.bold(line)}\n`;
         } else if (trimmed.startsWith('```')) {
-            writeLine(`  ${th.muted(line)}`);
+            contentStr += `${th.muted(line)}\n`;
         } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-            writeLine(`  ${th.info('•')} ${th.text(line.replace(/^[-*]\s*/, ''))}`);
+            contentStr += `${th.info('•')} ${th.text(line.replace(/^[-*]\s*/, ''))}\n`;
         } else {
-            writeLine(`  ${th.text(line)}`);
+            contentStr += `${th.text(line)}\n`;
         }
     });
-    writeLine();
 
     if (result.formalProof) {
-        writeLine(separator);
-        writeLine(`  ${th.accent.bold('◆ LEAN 4 FORMAL THEOREM')}`);
-        writeLine(`  ${th.muted('```lean')}`);
-        result.formalProof.trim().split('\n').forEach(line => writeLine(`  ${th.info(line)}`));
-        writeLine(`  ${th.muted('```')}`);
-        writeLine();
+        contentStr += `\n${th.accent.bold('◆ LEAN 4 FORMAL THEOREM')}\n`;
+        contentStr += `${th.muted('```lean')}\n`;
+        result.formalProof.trim().split('\n').forEach(line => contentStr += `${th.info(line)}\n`);
+        contentStr += `${th.muted('```')}\n`;
     }
 
-    writeLine(separator);
-    writeLine(`  ${th.muted('Domain:')} ${th.text(result.primaryDomain || 'Algebra')}   ${th.muted('│')}   ${th.muted('Confidence:')} ${th.success(confidencePct + '%')}   ${th.muted('│')}   ${th.muted('Lean 4:')} ${verified ? th.success('VERIFIED ✅') : th.warning('SYMBOLICALLY CHECKED ⚠️')}   ${th.muted('│')}   ${th.muted('Time:')} ${th.text(elapsed + 's')}`);
-    writeLine(separator);
+    contentStr += `\n${th.muted('────────────────────────────────────────────────────────────────────────────')}\n`;
+    contentStr += `${th.muted('Domain:')} ${domainEmoji} ${th.text(domain)}   ${th.muted('│')}   ${th.muted('Confidence:')} ${th.success(confidencePct + '%')}   ${th.muted('│')}   ${th.muted('Lean 4:')} ${verified ? th.success('VERIFIED ✅') : th.warning('SYMBOLICALLY CHECKED ⚠️')}   ${th.muted('│')}   ${th.muted('Time:')} ${th.text(elapsed + 's')}`;
+
+    const boxOptions = {
+        padding: 1,
+        margin: 1,
+        borderStyle: 'round',
+        borderColor: 'cyan',
+        title: th.primary.bold(' ✨ NeuroSyn Engine Result ✨ '),
+        titleAlignment: 'center'
+    };
+
+    writeLine();
+    writeLine(boxen(contentStr, boxOptions));
     writeLine();
 }
 
