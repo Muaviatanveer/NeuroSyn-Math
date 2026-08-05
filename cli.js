@@ -59,16 +59,159 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Load local .env or fallback to ~/.neurosyn/.env
-if (fs.existsSync('.env')) {
-    process.loadEnvFile('.env');
-} else {
-    const homeEnv = path.join(os.homedir(), '.neurosyn', '.env');
-    if (fs.existsSync(homeEnv)) {
-        process.loadEnvFile(homeEnv);
-    }
+const localEnv = '.env';
+const homeEnv = path.join(os.homedir(), '.neurosyn', '.env');
+let envLoaded = false;
+
+if (fs.existsSync(localEnv)) {
+    process.loadEnvFile(localEnv);
+    envLoaded = true;
+} else if (fs.existsSync(homeEnv)) {
+    process.loadEnvFile(homeEnv);
+    envLoaded = true;
 }
 
 const writeLine = (str = '') => process.stdout.write(`${str}\n`);
+
+/* ============================================================================
+ * 0. PRE-FLIGHT CHECKS (Ollama + Model + .env)
+ * ==========================================================================*/
+async function preFlightChecks() {
+    const ollamaBase = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+    const requiredModel = process.env.LOCAL_MATH_MODEL || 'deepseek-r1:32b';
+
+    writeLine();
+    writeLine(chalk.hex('#7AA2F7').bold('  ────────────────────────────────────────────────────────────────────────────'));
+    writeLine(chalk.hex('#7AA2F7').bold('   🔍 NEUROSYN-MATH PRE-FLIGHT CHECKS'));
+    writeLine(chalk.hex('#7AA2F7').bold('  ────────────────────────────────────────────────────────────────────────────'));
+    writeLine();
+
+    // ─── Check 1: .env file ───
+    if (!envLoaded) {
+        writeLine(chalk.hex('#E0AF68')('  ⚠️  No .env file found.'));
+        writeLine(chalk.hex('#565F89')('     System will use default configuration (deepseek-r1:32b on localhost).'));
+        writeLine(chalk.hex('#565F89')('     To customize, create ~/.neurosyn/.env with:'));
+        writeLine();
+        writeLine(chalk.hex('#7DCFFF')('       LOCAL_MATH_MODEL=deepseek-r1:32b'));
+        writeLine(chalk.hex('#7DCFFF')('       LOCAL_FAST_MODEL=qwen2.5-coder:7b'));
+        writeLine(chalk.hex('#7DCFFF')('       OLLAMA_HOST=http://127.0.0.1:11434'));
+        writeLine();
+    } else {
+        writeLine(chalk.hex('#9ECE6A')('  ✔  .env loaded successfully'));
+    }
+
+    // ─── Check 2: Ollama connectivity ───
+    let ollamaOnline = false;
+    try {
+        const url = `${ollamaBase}/api/tags`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+            ollamaOnline = true;
+            writeLine(chalk.hex('#9ECE6A')(`  ✔  Ollama is running at ${ollamaBase}`));
+        }
+    } catch (_) {
+        // Ollama not reachable
+    }
+
+    if (!ollamaOnline) {
+        writeLine();
+        const msg = boxen(
+            chalk.hex('#F7768E').bold('  ❌  Ollama is NOT running!\n\n') +
+            chalk.hex('#C0CAF5')('  NeuroSyn-Math requires Ollama to be installed and running.\n') +
+            chalk.hex('#C0CAF5')('  It provides the local LLM inference engine.\n\n') +
+            chalk.hex('#7AA2F7').bold('  Step 1: Install Ollama\n') +
+            chalk.hex('#7DCFFF')('    → https://ollama.com/download\n\n') +
+            chalk.hex('#7AA2F7').bold('  Step 2: Start Ollama\n') +
+            chalk.hex('#7DCFFF')('    → Open the Ollama app, or run: ollama serve\n\n') +
+            chalk.hex('#7AA2F7').bold('  Step 3: Pull a reasoning model\n') +
+            chalk.hex('#7DCFFF')(`    → ollama pull ${requiredModel}\n\n`) +
+            chalk.hex('#7AA2F7').bold('  Step 4: Re-run NeuroSyn-Math\n') +
+            chalk.hex('#7DCFFF')('    → npx neurosyn-math'),
+            {
+                padding: 1,
+                margin: 1,
+                borderStyle: 'round',
+                borderColor: 'red',
+                title: chalk.hex('#F7768E').bold(' ⛔ Ollama Required '),
+                titleAlignment: 'center'
+            }
+        );
+        writeLine(msg);
+        writeLine();
+        process.exit(1);
+    }
+
+    // ─── Check 3: Required model availability ───
+    let modelFound = false;
+    try {
+        const url = `${ollamaBase}/api/tags`;
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            const models = (data.models || []).map(m => m.name);
+            modelFound = models.some(m => m === requiredModel || m.startsWith(requiredModel.split(':')[0]));
+
+            if (modelFound) {
+                writeLine(chalk.hex('#9ECE6A')(`  ✔  Model "${requiredModel}" is available`));
+            } else {
+                writeLine();
+                writeLine(chalk.hex('#F7768E')(`  ❌  Required model "${requiredModel}" not found in Ollama!`));
+                writeLine();
+                writeLine(chalk.hex('#C0CAF5')('     Available models on your system:'));
+                if (models.length === 0) {
+                    writeLine(chalk.hex('#565F89')('       (none — no models pulled yet)'));
+                } else {
+                    models.forEach(m => {
+                        writeLine(chalk.hex('#7DCFFF')(`       • ${m}`));
+                    });
+                }
+                writeLine();
+                writeLine(chalk.hex('#E0AF68')(`     To fix, run:`));
+                writeLine(chalk.hex('#7DCFFF').bold(`       ollama pull ${requiredModel}`));
+                writeLine();
+                writeLine(chalk.hex('#565F89')('     Or set a different model in your .env:'));
+                writeLine(chalk.hex('#7DCFFF')('       LOCAL_MATH_MODEL=deepseek-r1:14b'));
+                writeLine();
+                process.exit(1);
+            }
+        }
+    } catch (_) {
+        // Already checked Ollama connectivity above
+    }
+
+    // ─── Check 4: Optional fast model ───
+    const fastModel = process.env.LOCAL_FAST_MODEL || 'qwen2.5-coder:7b';
+    if (fastModel !== requiredModel) {
+        try {
+            const url = `${ollamaBase}/api/tags`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                const models = (data.models || []).map(m => m.name);
+                const fastFound = models.some(m => m === fastModel || m.startsWith(fastModel.split(':')[0]));
+                if (fastFound) {
+                    writeLine(chalk.hex('#9ECE6A')(`  ✔  Fast model "${fastModel}" is available`));
+                } else {
+                    writeLine(chalk.hex('#E0AF68')(`  ⚠️  Fast model "${fastModel}" not found — will fallback to ${requiredModel}`));
+                    writeLine(chalk.hex('#565F89')(`     For faster parsing, run: ollama pull ${fastModel}`));
+                }
+            }
+        } catch (_) {}
+    }
+
+    writeLine();
+    writeLine(chalk.hex('#9ECE6A').bold('  ✔  All pre-flight checks passed! Starting NeuroSyn-Math...'));
+    writeLine(chalk.hex('#7AA2F7').bold('  ────────────────────────────────────────────────────────────────────────────'));
+    writeLine();
+
+    // Small delay so user can read the checks
+    await new Promise(r => setTimeout(r, 1500));
+}
+
 
 /* ============================================================================
  * 1. THEMES
@@ -365,6 +508,7 @@ function askLine(promptText) {
 }
 
 async function startREPL() {
+    await preFlightChecks();
     await authenticateUser();
     printMinimalHeader();
 
