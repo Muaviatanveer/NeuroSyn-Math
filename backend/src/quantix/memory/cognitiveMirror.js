@@ -16,7 +16,7 @@ export class CognitiveMirror {
         this.memory = memory;
 
         // Dynamic Model Routing for Insight Synthesis
-        this.synthesisModel = process.env.LOCAL_MATH_MODEL || process.env.OPENAI_MODEL || 'deepseek-r1:32b';
+        this.synthesisModel = getModelForRole('math_reasoning');
 
         if (this.synthesisModel.includes('deepseek') || this.synthesisModel.includes('qwq') || this.synthesisModel.includes('mistral')) {
             this.client = clients.ollama || clients.deepseek || client;

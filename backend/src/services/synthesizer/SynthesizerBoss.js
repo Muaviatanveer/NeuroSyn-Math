@@ -7,10 +7,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger.js';
 
+import { getModelForRole } from '../../config/clients.js';
+
 async function _callSynthesizerLLM(systemPrompt, userPrompt, clients) {
     const providers = [
         { name: 'anthropic', model: 'claude-haiku-5' },
-        { name: 'openai', model: process.env.OPENAI_MODEL || 'deepseek-r1:32b' },
+        { name: 'openai', model: getModelForRole('math_reasoning') },
         { name: 'deepseek', model: 'deepseek-chat' }
     ];
 

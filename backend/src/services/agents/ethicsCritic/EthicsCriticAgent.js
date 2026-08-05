@@ -94,14 +94,23 @@ Respond in JSON:
             const client = this.getClient('openai') || this.getClient('deepseek');
             if (!client) return { decision: 'approved', reason: 'Safety review passed (bypassed).' };
 
+            const { getModelForRole } = await import('../../config/clients.js');
             const res = await client.chat.completions.create({
-                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
+                model: getModelForRole('ethics_critic'),
                 messages: [{ role: 'user', content: prompt }],
                 response_format: { type: 'json_object' },
                 temperature: 0.0
             });
 
-            return JSON.parse(res.choices[0].message.content);
+            let rawContent = res.choices[0].message.content || '';
+            let cleaned = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && start <= end) {
+                cleaned = cleaned.substring(start, end + 1);
+            }
+            return JSON.parse(cleaned);
         } catch (e) {
             return { decision: 'approved', reason: 'Default approval on fallback.' };
         }

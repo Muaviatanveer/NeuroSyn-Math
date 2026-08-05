@@ -5,14 +5,16 @@
  */
 import logger from '../../utils/logger.js';
 
+import { getModelForRole } from '../../config/clients.js';
+
 export class TaskConstructor {
-    constructor({ client, logger: appLogger = logger, model = process.env.OPENAI_MODEL || 'deepseek-r1:32b' }) {
+    constructor({ client, logger: appLogger = logger, model }) {
         if (!client) {
             throw new Error("[NeuroSyn-Math] TaskConstructor requires an LLM client.");
         }
         this.client = client;
         this.logger = appLogger;
-        this.model = model;
+        this.model = model || getModelForRole('meta_planner');
     }
 
     /**

@@ -5,6 +5,7 @@
  */
 
 import logger from '../utils/logger.js';
+import { getModelForRole } from '../config/clients.js';
 
 function extractContent(response) {
     if (!response) return "[Error: No response object]";
@@ -46,7 +47,7 @@ export class AnalyticalThinker extends BaseAgent {
         try {
             const client = this.openai || this.clients.openai;
             const res = await client.chat.completions.create({
-                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
+                model: getModelForRole('math_reasoning'),
                 messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
                 temperature: 0.1,
                 stream: true

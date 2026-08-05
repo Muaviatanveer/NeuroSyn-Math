@@ -10,10 +10,11 @@ import logger from '../utils/logger.js';
 
 export const MODELS = {
     get LOCAL_MATH_REASONER() { return process.env.LOCAL_MATH_MODEL || 'deepseek-r1:32b'; },
+    get LOCAL_FAST_MODEL() { return process.env.LOCAL_FAST_MODEL || 'qwen2.5:7b'; },
     get LOCAL_CODE_SPECIALIST() { return process.env.LOCAL_CODE_MODEL || 'qwen2.5-coder:32b'; },
     get LOCAL_EMBEDDINGS() { return process.env.LOCAL_EMBEDDING_MODEL || 'nomic-embed-text:latest'; },
-    get OPENAI_GPT4O() { return process.env.OPENAI_MODEL || process.env.OPENAI_MODEL || 'deepseek-r1:32b'; },
-    get DEEPSEEK_CLOUD_REASONER() { return process.env.DEEPSEEK_MODEL || 'deepseek-r1:32b'; }
+    get OPENAI_GPT4O() { return process.env.OPENAI_MODEL || 'gpt-4o'; },
+    get DEEPSEEK_CLOUD_REASONER() { return process.env.DEEPSEEK_MODEL || 'deepseek-reasoner'; }
 };
 
 class ClientRegistry {
@@ -67,8 +68,12 @@ class ClientRegistry {
 
         switch (role) {
             case 'math_reasoning':
-            case 'fast_parser':
                 return isLocalDeepseek ? MODELS.LOCAL_MATH_REASONER : MODELS.DEEPSEEK_CLOUD_REASONER;
+            case 'fast_parser':
+            case 'meta_planner':
+            case 'emotion_engine':
+            case 'ethics_critic':
+                return isLocalDeepseek ? MODELS.LOCAL_FAST_MODEL : 'gpt-4o-mini';
             case 'code_synthesis':
                 return process.env.USE_LOCAL_CODE === 'true' ? MODELS.LOCAL_CODE_SPECIALIST : MODELS.LOCAL_MATH_REASONER;
             case 'embeddings':

@@ -3,6 +3,7 @@
  * @description Centralized Factory & Registry for NeuroSyn-Math Solvers.
  * Manages instances of GptSolver, DeepseekSolver, and specialized Verification Solvers.
  */
+import { getModelForRole } from '../../config/clients.js';
 import { GptSolver } from './gptSolver.js';
 import { DeepseekSolver } from './deepseekSolver.js';
 import logger from '../../utils/logger.js';
@@ -38,7 +39,7 @@ export const quantixSolvers = {
         const solvers = new Map();
         const baseConfig = { logger: appLogger };
 
-        const openaiModel = process.env.OPENAI_MODEL || process.env.OPENAI_MODEL || 'deepseek-r1:32b';
+        const openaiModel = getModelForRole('math_reasoning');
         const deepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
         // 1. Primary Neural Solvers

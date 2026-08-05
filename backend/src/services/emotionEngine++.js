@@ -59,8 +59,10 @@ Analyze the user prompt and generate an intent map strictly in JSON:
             const client = this.getClient('openai') || this.getClient('deepseek');
             if (!client) return this.getTechnicalBypassState();
 
+            const { getModelForRole } = await import('../config/clients.js');
+            
             const response = await client.chat.completions.create({
-                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
+                model: getModelForRole('emotion_engine'),
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: `Prompt: "${prompt}"` }

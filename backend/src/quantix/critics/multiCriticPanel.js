@@ -3,16 +3,17 @@
  * @description Multi-Perspective Metacognitive Critic Panel with Precision & Boundary Verification.
  */
 import logger from '../../utils/logger.js';
+import { getModelForRole } from '../../config/clients.js';
 
 export class MultiCriticPanel {
-    constructor({ client, clients, logger: appLogger = logger, model = process.env.OPENAI_MODEL || 'deepseek-r1:32b' } = {}) {
+    constructor({ client, clients, logger: appLogger = logger, model } = {}) {
         const activeClient = client || clients?.openai || clients?.deepseek || clients?.anthropic;
         if (!activeClient) {
             throw new Error("[NeuroSyn-Math] MultiCriticPanel requires an LLM client.");
         }
         this.client = activeClient;
         this.logger = appLogger;
-        this.model = model;
+        this.model = model || getModelForRole('math_reasoning');
         this.batchSize = 3;
     }
 

@@ -7,14 +7,16 @@
 import logger from '../../utils/logger.js';
 import ProofObject from '../proofFormats/proofObject.js';
 
+import { getModelForRole } from '../../config/clients.js';
+
 export class Synthesizer {
-    constructor({ client, logger: appLogger = logger, model = process.env.OPENAI_MODEL || 'deepseek-r1:32b' }) {
+    constructor({ client, logger: appLogger = logger, model }) {
         if (!client) {
             throw new Error("[NeuroSyn-Math] Synthesizer requires an LLM client.");
         }
         this.client = client;
         this.logger = appLogger;
-        this.model = model;
+        this.model = model || getModelForRole('math_reasoning');
     }
 
     /**
