@@ -342,12 +342,9 @@ async function startREPL() {
     await authenticateUser();
     printMinimalHeader();
 
-    process.stdin.resume();
-
     const rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout,
-        prompt: getTheme().promptColor('NeuroSyn ❯ ')
+        output: process.stdout
     });
 
     rl.on('SIGINT', () => {
@@ -355,41 +352,37 @@ async function startREPL() {
         process.exit(0);
     });
 
-    let inputBuffer = [];
-    let pasteTimeout = null;
-    let isProcessing = false;
-
-    rl.prompt();
-
-    rl.on('line', async (line) => {
-        if (isProcessing) return;
+    while (true) {
+        const th = getTheme();
+        
+        let line;
+        try {
+            line = await new Promise((resolve) => {
+                rl.question(th.promptColor('NeuroSyn ❯ '), resolve);
+            });
+        } catch (err) {
+            break;
+        }
 
         let cleanLine = line.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
         
-        // Multiline support: if line ends with '\', continue reading
-        if (cleanLine.trim().endsWith('\\')) {
-            inputBuffer.push(cleanLine.replace(/\\$/, ''));
-            const th = getTheme();
-            rl.setPrompt(th.accent('... '));
-            rl.prompt();
-            return;
+        // Handle multiline with \
+        let inputBuffer = [cleanLine];
+        while (inputBuffer[inputBuffer.length - 1].trim().endsWith('\\')) {
+            inputBuffer[inputBuffer.length - 1] = inputBuffer[inputBuffer.length - 1].replace(/\\$/, '');
+            const nextLine = await new Promise((resolve) => {
+                rl.question(th.accent('... '), resolve);
+            });
+            inputBuffer.push(nextLine.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, ''));
         }
 
-        inputBuffer.push(cleanLine);
         const input = inputBuffer.join('\n').trim();
-        inputBuffer = [];
-        const th = getTheme();
 
-        rl.setPrompt(th.promptColor('NeuroSyn ❯ '));
+        if (!input) continue;
+        if (input.startsWith('/')) { await handleCommand(input); continue; }
 
-        if (!input) { rl.prompt(); return; }
-        if (input.startsWith('/')) { await handleCommand(input); rl.prompt(); return; }
-
-        isProcessing = true;
         writeLine();
-
         const startMs = performance.now();
-
         const spinner = ora({ text: th.info('Initiating...'), color: 'cyan', indent: 2 }).start();
 
         let timer = setInterval(() => {
@@ -443,20 +436,26 @@ async function startREPL() {
             clearInterval(timer);
             const elapsed = ((performance.now() - startMs) / 1000).toFixed(2);
 
-            spinner.succeed(` ${th.success.bold('Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
+            if (!activeAgentStream) {
+                spinner.succeed(` ${th.success.bold('Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
+            } else {
+                writeLine();
+                writeLine(`  ${th.success.bold('✔ Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
+            }
+            
             await dbService.saveHistory(activeUser, input, result, elapsed);
-
             renderResultCard(input, result, elapsed);
         } catch (err) {
             clearInterval(timer);
-            spinner.fail(` ${th.error.bold('Error:')} ${err.message}`);
+            if (!activeAgentStream) {
+                spinner.fail(` ${th.error.bold('Error:')} ${err.message}`);
+            } else {
+                writeLine();
+                writeLine(`  ${th.error.bold('✖ Error:')} ${err.message}`);
+            }
             writeLine();
         }
-
-        isProcessing = false;
-        writeLine();
-        rl.prompt();
-    });
+    }
 }
 
 startREPL();
