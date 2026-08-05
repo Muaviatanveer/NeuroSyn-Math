@@ -7,7 +7,7 @@ import logger from '../../utils/logger.js';
 export class AnalyticalThinker {
   constructor({
     client,
-    modelName = 'gpt-4o',
+    modelName = process.env.OPENAI_MODEL || 'deepseek-r1:32b',
     name = 'AnalyticalThinker',
     capabilities = ['deductive_reasoning', 'generic_math'],
     logger: appLogger = logger

@@ -7,7 +7,7 @@ import logger from '../../../utils/logger.js';
 import { MathUtils } from '../../../utils/mathUtils.js';
 
 export class NumberTheoryAgent {
-    constructor({ client, modelName = 'gpt-4o', logger: appLogger = logger }) {
+    constructor({ client, modelName = process.env.OPENAI_MODEL || 'deepseek-r1:32b', logger: appLogger = logger }) {
         if (!client) {
             throw new Error('[NumberTheoryAgent] Requires a valid LLM client.');
         }

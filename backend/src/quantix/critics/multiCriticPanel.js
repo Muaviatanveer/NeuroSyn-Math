@@ -5,7 +5,7 @@
 import logger from '../../utils/logger.js';
 
 export class MultiCriticPanel {
-    constructor({ client, clients, logger: appLogger = logger, model = 'gpt-4o' } = {}) {
+    constructor({ client, clients, logger: appLogger = logger, model = process.env.OPENAI_MODEL || 'deepseek-r1:32b' } = {}) {
         const activeClient = client || clients?.openai || clients?.deepseek || clients?.anthropic;
         if (!activeClient) {
             throw new Error("[NeuroSyn-Math] MultiCriticPanel requires an LLM client.");

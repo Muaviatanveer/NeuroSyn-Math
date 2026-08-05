@@ -46,7 +46,7 @@ export class AnalyticalThinker extends BaseAgent {
         try {
             const client = this.openai || this.clients.openai;
             const res = await client.chat.completions.create({
-                model: 'gpt-4o',
+                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
                 messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
                 temperature: 0.1,
                 stream: true
@@ -83,7 +83,7 @@ export class ComprehensiveThinker extends BaseAgent {
         logger.info(`[${this.name}] Performing comprehensive synthesis...`);
         const client = this.getClient('openai') || this.getClient('deepseek');
         const res = await client.chat.completions.create({
-            model: 'gpt-4o',
+            model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
             messages: [
                 { role: 'system', content: 'You are an exhaustive research synthesizer.' },
                 { role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }
@@ -144,7 +144,7 @@ export class CreativeThinker extends BaseAgent {
 
         const client = this.getClient('openai') || this.getClient('deepseek');
         const res = await client.chat.completions.create({
-            model: 'gpt-4o',
+            model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
             messages: [{ role: 'user', content: userPrompt }],
             temperature: 0.8,
             stream: true
@@ -207,7 +207,7 @@ export class GrokThinker extends BaseAgent {
     async think({ prompt, context = '' }, stream) {
         const client = this.getClient('xai') || this.getClient('openai');
         const res = await client.chat.completions.create({
-            model: 'gpt-4o',
+            model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
             messages: [{ role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }],
             stream: true
         });

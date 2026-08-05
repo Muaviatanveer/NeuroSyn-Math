@@ -10,7 +10,7 @@ import logger from '../../utils/logger.js';
 async function _callSynthesizerLLM(systemPrompt, userPrompt, clients) {
     const providers = [
         { name: 'anthropic', model: 'claude-haiku-5' },
-        { name: 'openai', model: 'gpt-4o' },
+        { name: 'openai', model: process.env.OPENAI_MODEL || 'deepseek-r1:32b' },
         { name: 'deepseek', model: 'deepseek-chat' }
     ];
 

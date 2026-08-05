@@ -6,7 +6,7 @@
 import logger from '../../utils/logger.js';
 
 export class TaskConstructor {
-    constructor({ client, logger: appLogger = logger, model = 'gpt-4o' }) {
+    constructor({ client, logger: appLogger = logger, model = process.env.OPENAI_MODEL || 'deepseek-r1:32b' }) {
         if (!client) {
             throw new Error("[NeuroSyn-Math] TaskConstructor requires an LLM client.");
         }

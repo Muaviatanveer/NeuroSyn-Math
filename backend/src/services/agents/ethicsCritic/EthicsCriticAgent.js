@@ -95,7 +95,7 @@ Respond in JSON:
             if (!client) return { decision: 'approved', reason: 'Safety review passed (bypassed).' };
 
             const res = await client.chat.completions.create({
-                model: 'gpt-4o',
+                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
                 messages: [{ role: 'user', content: prompt }],
                 response_format: { type: 'json_object' },
                 temperature: 0.0

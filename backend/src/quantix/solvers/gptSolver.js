@@ -20,7 +20,7 @@ const SLEEP = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export class GptSolver {
     constructor({
         client,
-        modelName = 'gpt-4o',
+        modelName = process.env.OPENAI_MODEL || 'deepseek-r1:32b',
         maxRetries = 2,
         timeoutMs = 60000,
         logger: appLogger = logger

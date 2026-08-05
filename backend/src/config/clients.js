@@ -12,7 +12,7 @@ export const MODELS = {
     get LOCAL_MATH_REASONER() { return process.env.LOCAL_MATH_MODEL || 'deepseek-r1:32b'; },
     get LOCAL_CODE_SPECIALIST() { return process.env.LOCAL_CODE_MODEL || 'qwen2.5-coder:32b'; },
     get LOCAL_EMBEDDINGS() { return process.env.LOCAL_EMBEDDING_MODEL || 'nomic-embed-text:latest'; },
-    get OPENAI_GPT4O() { return process.env.OPENAI_MODEL || 'gpt-4o'; },
+    get OPENAI_GPT4O() { return process.env.OPENAI_MODEL || process.env.OPENAI_MODEL || 'deepseek-r1:32b'; },
     get DEEPSEEK_CLOUD_REASONER() { return process.env.DEEPSEEK_MODEL || 'deepseek-r1:32b'; }
 };
 

@@ -60,7 +60,7 @@ Analyze the user prompt and generate an intent map strictly in JSON:
             if (!client) return this.getTechnicalBypassState();
 
             const response = await client.chat.completions.create({
-                model: 'gpt-4o',
+                model: process.env.OPENAI_MODEL || 'deepseek-r1:32b',
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: `Prompt: "${prompt}"` }

@@ -38,7 +38,7 @@ export const quantixSolvers = {
         const solvers = new Map();
         const baseConfig = { logger: appLogger };
 
-        const openaiModel = process.env.OPENAI_MODEL || 'gpt-4o';
+        const openaiModel = process.env.OPENAI_MODEL || process.env.OPENAI_MODEL || 'deepseek-r1:32b';
         const deepseekModel = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
         // 1. Primary Neural Solvers
