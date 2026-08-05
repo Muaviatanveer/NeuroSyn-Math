@@ -365,8 +365,19 @@ async function startREPL() {
             const spinner = ora({ text: th.info('Initiating...'), color: 'cyan', indent: 2 }).start();
 
             let timer = setInterval(() => {
-                const elap = ((performance.now() - startMs) / 1000).toFixed(1);
-                const currentText = spinner.text.replace(/ \[\d+\.\ds\]$/, '');
+                const elapSec = (performance.now() - startMs) / 1000;
+                const elap = elapSec.toFixed(1);
+                
+                let currentText = spinner.text.replace(/ \[\d+\.\ds\]$/, '').replace(/ - (Model is processing context|Model is generating deep).*$/, '');
+                
+                if (!activeAgentStream && elapSec > 15) {
+                    if (elapSec > 120) {
+                        currentText += ' - Model is generating deep reasoning...';
+                    } else {
+                        currentText += ' - Model is processing context (Prompt Evaluation)...';
+                    }
+                }
+                
                 spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
             }, 500);
 

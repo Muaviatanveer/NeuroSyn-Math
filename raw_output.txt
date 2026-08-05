@@ -1,0 +1,5 @@
+Starting stream...
+{"id":"chatcmpl-811","object":"chat.completion.chunk","created":1785932673,"model":"deepseek-r1:32b","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":"\nI"},"finish_reason":null}]}
+{"id":"chatcmpl-811","object":"chat.completion.chunk","created":1785932673,"model":"deepseek-r1:32b","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":" recognize"},"finish_reason":null}]}
+{"id":"chatcmpl-811","object":"chat.completion.chunk","created":1785932673,"model":"deepseek-r1:32b","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning":" that"},"finish_reason":null}]}
+{"id":"chatcmpl-811","object":"chat.completion.chunk","created":1785932673,"model":"deepseek-r1:32b","system_fingerprint":"fp_ollama","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":"length"}]}
