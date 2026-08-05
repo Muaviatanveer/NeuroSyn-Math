@@ -50,7 +50,7 @@ You are the SymPy Calculus Tool Generator for AnalysisAgent in NeuroSyn-Math.
 Write a standalone Python script using \`sympy\` (\`limit\`, \`diff\`, \`integrate\`, \`dsolve\`, \`series\`)
 or numeric optimization to compute exact limits, antiderivatives, or test inequality bounds (e.g., AM-GM, Cauchy-Schwarz).
 
-Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
+DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         try {

@@ -48,7 +48,7 @@ export class AlgebraAgent {
         const sysPrompt = `
 You are the SymPy Code Generator for AlgebraAgent in NeuroSyn-Math.
 Write a standalone Python script using SymPy to simplify, solve, or verify the algebraic statement.
-Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         try {

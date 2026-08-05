@@ -50,7 +50,7 @@ You are the Z3 Logic Script Generator for LogicAgent in NeuroSyn-Math.
 Write a Python script using \`z3\` (\`Solver\`, \`Bool\`, \`And\`, \`Or\`, \`Not\`, \`Implies\`)
 to check if assuming the negation of the goal leads to UNSAT (Proof by Contradiction).
 
-Output ONLY valid Python code block inside \`\`\`python ... \`\`\` fences.
+DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         try {

@@ -48,7 +48,7 @@ export class GeometryAgent {
         const sysPrompt = `
 You are the SymPy Geometry Code Generator for GeometryAgent in NeuroSyn-Math.
 Write a standalone Python script using \`sympy.geometry\` or coordinate linear algebra to compute exact coordinates or distances.
-Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         try {

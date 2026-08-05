@@ -91,7 +91,7 @@ export class NumberTheoryAgent {
 You are the Number Theory Tool Generator. Write a standalone Python script.
 ⚡ CRITICAL:
 1. Do NOT write endless explanations.
-2. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+2. DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         try {

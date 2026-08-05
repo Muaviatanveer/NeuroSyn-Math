@@ -93,7 +93,7 @@ export class CombinatoricsAgent {
     async _generateCombinatoricsScript(prompt, stream) {
         const sysPrompt = `
 You are the Combinatorial Simulation Generator. Write a standalone Python script.
-Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+DO NOT output JSON. Output raw Markdown text. Embed your python code in a \`\`\`python ... \`\`\` block.
 `;
 
         const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
