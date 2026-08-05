@@ -249,7 +249,7 @@ function renderResultCard(problemText, result, elapsed) {
  * ==========================================================================*/
 async function handleCommand(cmdString) {
     const th = getTheme();
-    const cleanInput = cmdString.trim().replace(/\/+$/, '');
+    const cleanInput = cmdString.replace(/\x1b\[200~|\x1b\[201~/g, '').trim().replace(/\/+$/, '');
     const parts = cleanInput.split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const arg = parts[1] || '';
