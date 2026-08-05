@@ -31,15 +31,24 @@ class HaystackResearcher {
         this.name = "HaystackResearcher";
     }
 
-    async think({ prompt, context = '', strategy = {} }) {
+    async think({ prompt, context = '', strategy = {} }, stream) {
         const systemPrompt = `You are Haystack Researcher specializing in deep information retrieval. Strategy: ${JSON.stringify(strategy)}`;
         try {
             const response = await this.clients.deepseek.chat.completions.create({
                 model: "deepseek-chat",
                 messages: [{ role: "system", content: systemPrompt }, { role: "user", content: `Context:\n${context}\n\nPrompt:\n${prompt}` }],
                 temperature: strategy.temperature ?? 0.5,
+                stream: true
             });
-            return { agent: this.name, content: response.choices[0].message.content };
+            let fullText = '';
+            for await (const chunk of response) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
+            return { agent: this.name, content: fullText };
         } catch (error) {
             return { agent: this.name, content: null, error: error.message };
         }
@@ -161,7 +170,7 @@ class SynapseFabric {
 
     async _executeFastPath({ prompt, trace, sendStreamData }) {
         const agent = AgentRegistry.getAgent('AnalyticalThinker');
-        const result = await agent.think({ prompt });
+        const result = await agent.think({ prompt }, sendStreamData);
         sendStreamData('content', { content: result.content, traceId: trace.id });
         return { finalResponse: result.content, trace };
     }

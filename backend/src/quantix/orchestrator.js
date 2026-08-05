@@ -161,7 +161,7 @@ export class NeuroSynMathOrchestrator {
                     this.logger.info('[Orchestrator] Anti-Cheat triggered. Skipping futile repair attempts.');
                 } else if (this.maxProofRepairAttempts > 0) {
                     stream('status', { message: `🔧 Proof Repair Loop: Fixing Lean error on ${proof.strategyName || proof.agent}...` });
-                    currentLeanCode = await this._repairLeanProof(currentLeanCode, lastLeanError);
+                    currentLeanCode = await this._repairLeanProof(currentLeanCode, lastLeanError, stream);
                     const retryVerification = await this.leanExecutor.verifyLean4(currentLeanCode);
                     if (retryVerification.success || retryVerification.verified) {
                         isVerified = true;
@@ -174,15 +174,24 @@ export class NeuroSynMathOrchestrator {
         return verifiedResults;
     }
 
-    async _repairLeanProof(leanCode, errorMsg) {
+    async _repairLeanProof(leanCode, errorMsg, stream = () => {}) {
         const prompt = `Fix this Lean 4 code. Error: ${errorMsg}\nCode: ${leanCode}\nDO NOT USE 'sorry'. Return ONLY JSON { "repairedLeanCode": "..." }`;
         try {
             const res = await this.primaryClient.chat.completions.create({
                 model: this.mathModel,
                 messages: [{ role: 'user', content: prompt }],
-                temperature: 0.1
+                temperature: 0.1,
+                stream: true
             });
-            const parsed = this._safeParseJson(res.choices[0].message.content);
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: 'LeanRepair', token });
+                }
+            }
+            const parsed = this._safeParseJson(fullText);
             return parsed.repairedLeanCode || leanCode;
         } catch (e) {
             return leanCode;

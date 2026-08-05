@@ -38,7 +38,7 @@ export class AnalyticalThinker extends BaseAgent {
         this.openai = this.getClient('openai') || this.getClient('deepseek');
     }
 
-    async think({ prompt, context = '' }) {
+    async think({ prompt, context = '' }, stream) {
         logger.info(`[${this.name}] Executing reasoning on prompt: "${prompt.slice(0, 80)}..."`);
         const systemPrompt = `You are the Analytical Thinker agent in NeuroSyn-Math. Provide clear, logical analysis using LaTeX for equations.`;
         const userPrompt = `Context:\n${context}\n\nPrompt:\n${prompt}`;
@@ -48,9 +48,18 @@ export class AnalyticalThinker extends BaseAgent {
             const res = await client.chat.completions.create({
                 model: 'gpt-4o',
                 messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-                temperature: 0.1
+                temperature: 0.1,
+                stream: true
             });
-            return { agent: this.name, content: extractContent(res) };
+            let fullText = '';
+            for await (const chunk of res) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullText += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token });
+                }
+            }
+            return { agent: this.name, content: fullText };
         } catch (err) {
             logger.error(`[${this.name}] Failed: ${err.message}`);
             return { agent: this.name, content: null, error: err.message };
@@ -70,7 +79,7 @@ export class ComprehensiveThinker extends BaseAgent {
         });
     }
 
-    async think({ prompt, context = '' }) {
+    async think({ prompt, context = '' }, stream) {
         logger.info(`[${this.name}] Performing comprehensive synthesis...`);
         const client = this.getClient('openai') || this.getClient('deepseek');
         const res = await client.chat.completions.create({
@@ -79,9 +88,18 @@ export class ComprehensiveThinker extends BaseAgent {
                 { role: 'system', content: 'You are an exhaustive research synthesizer.' },
                 { role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }
             ],
-            temperature: 0.2
+            temperature: 0.2,
+            stream: true
         });
-        return { agent: this.name, content: extractContent(res) };
+        let fullText = '';
+        for await (const chunk of res) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            fullText += token;
+            if (token && typeof stream === 'function') {
+                stream('token', { agent: this.name, token });
+            }
+        }
+        return { agent: this.name, content: fullText };
     }
 }
 
@@ -97,18 +115,28 @@ export class CreativeThinker extends BaseAgent {
         });
     }
 
-    async think({ prompt, context = '' }) {
+    async think({ prompt, context = '' }, stream) {
         const userPrompt = `Context:\n${context}\n\nPrompt:\n${prompt}`;
 
         try {
             const anthropic = this.getClient('anthropic');
             if (anthropic) {
+                // If anthropic is available, we could stream from it too, but we can stick to non-stream or stream if desired. Let's do streaming.
                 const res = await anthropic.messages.create({
                     model: 'claude-haiku-5',
                     max_tokens: 2048,
-                    messages: [{ role: 'user', content: userPrompt }]
+                    messages: [{ role: 'user', content: userPrompt }],
+                    stream: true
                 });
-                return { agent: this.name, content: extractContent(res) };
+                let fullText = '';
+                for await (const chunk of res) {
+                    const token = chunk.type === 'content_block_delta' ? chunk.delta?.text : '';
+                    fullText += token;
+                    if (token && typeof stream === 'function') {
+                        stream('token', { agent: this.name, token });
+                    }
+                }
+                return { agent: this.name, content: fullText };
             }
         } catch (e) {
             logger.warn(`[${this.name}] Anthropic fallback to OpenAI: ${e.message}`);
@@ -118,9 +146,18 @@ export class CreativeThinker extends BaseAgent {
         const res = await client.chat.completions.create({
             model: 'gpt-4o',
             messages: [{ role: 'user', content: userPrompt }],
-            temperature: 0.8
+            temperature: 0.8,
+            stream: true
         });
-        return { agent: this.name, content: extractContent(res) };
+        let fullText = '';
+        for await (const chunk of res) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            fullText += token;
+            if (token && typeof stream === 'function') {
+                stream('token', { agent: this.name, token });
+            }
+        }
+        return { agent: this.name, content: fullText };
     }
 }
 
@@ -136,13 +173,22 @@ export class DeepSeekThinker extends BaseAgent {
         });
     }
 
-    async think({ prompt, context = '' }) {
+    async think({ prompt, context = '' }, stream) {
         const client = this.getClient('deepseek') || this.getClient('openai');
         const res = await client.chat.completions.create({
             model: 'deepseek-chat',
-            messages: [{ role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }]
+            messages: [{ role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }],
+            stream: true
         });
-        return { agent: this.name, content: extractContent(res) };
+        let fullText = '';
+        for await (const chunk of res) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            fullText += token;
+            if (token && typeof stream === 'function') {
+                stream('token', { agent: this.name, token });
+            }
+        }
+        return { agent: this.name, content: fullText };
     }
 }
 
@@ -158,12 +204,21 @@ export class GrokThinker extends BaseAgent {
         });
     }
 
-    async think({ prompt, context = '' }) {
+    async think({ prompt, context = '' }, stream) {
         const client = this.getClient('xai') || this.getClient('openai');
         const res = await client.chat.completions.create({
             model: 'gpt-4o',
-            messages: [{ role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }]
+            messages: [{ role: 'user', content: `Context:\n${context}\n\nPrompt:\n${prompt}` }],
+            stream: true
         });
-        return { agent: this.name, content: extractContent(res) };
+        let fullText = '';
+        for await (const chunk of res) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            fullText += token;
+            if (token && typeof stream === 'function') {
+                stream('token', { agent: this.name, token });
+            }
+        }
+        return { agent: this.name, content: fullText };
     }
 }

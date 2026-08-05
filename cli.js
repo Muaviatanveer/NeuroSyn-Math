@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 /**
  * @file cli.js
- * @description Ultra-Minimalist AI Research Terminal for NeuroSyn-Math.
- * Features: Background log writing to file, fixed paste buffer, clean UI.
+ * @description Cross-Platform AI Research Terminal for NeuroSyn-Math (Windows, macOS, Linux).
  */
 
-process.noDeprecation = true; // Mute Node deprecation warnings
+process.noDeprecation = true;
 process.stdout.write('\x1b[?2004h'); // Enable Bracketed Paste Mode
 
 process.on('exit', () => {
@@ -20,7 +19,11 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import ora from 'ora';
 import { performance } from 'perf_hooks';
+import { fileURLToPath, pathToFileURL } from 'url'; // ⚡ Cross-platform URL utilities
 import { dbService } from './backend/src/config/db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const STORE_DIR = path.join(os.homedir(), '.neurosyn');
 const LOG_FILE = path.join(STORE_DIR, 'backend.log');
@@ -46,7 +49,6 @@ logger.info = (msg) => writeToFile('info', msg);
 logger.warn = (msg) => writeToFile('warn', msg);
 logger.error = (msg) => {
     writeToFile('error', msg);
-    // Errors should still print to the CLI so the user isn't blind
     process.stdout.write(`\n  ${chalk.red('❌ Backend Error:')} ${chalk.red(msg)}\n`);
 };
 logger.debug = (msg) => writeToFile('debug', msg);
@@ -157,21 +159,18 @@ async function authenticateUser() {
 }
 
 /* ============================================================================
- * 3. BACKEND LOAD (Package-relative path fix for npx)
+ * 3. BACKEND LOAD (⚡ Cross-Platform Windows/Linux/macOS File URL Fix)
  * ==========================================================================*/
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const REAL_BACKEND_PATH = path.join(__dirname, 'backend/src/services/synapseFabric.js');
-
+const REAL_BACKEND_PATH = path.join(__dirname, 'backend', 'src', 'services', 'synapseFabric.js');
 let backend;
-if (fs.existsSync(REAL_BACKEND_PATH)) {
-    const mod = await import(REAL_BACKEND_PATH);
+
+try {
+    // ⚡ Convert absolute Windows path (C:\...) to file:// URL scheme
+    const backendUrl = pathToFileURL(REAL_BACKEND_PATH).href;
+    const mod = await import(backendUrl);
     backend = mod.default;
-} else {
-    writeLine(chalk.red(`❌ Backend fabric missing at ${REAL_BACKEND_PATH}\n`));
+} catch (err) {
+    writeLine(chalk.red(`❌ Backend fabric missing or failed to load: ${err.message}\n`));
     process.exit(1);
 }
 
@@ -186,7 +185,7 @@ function printMinimalHeader() {
     writeLine(`  ${th.primary.bold('NeuroSyn Math Engine')}  ${th.muted('·')}  ${th.accent(model)}  ${th.muted('·')}  User: ${th.success(activeUser?.username || 'Guest')}`);
     writeLine(`  ${th.muted('────────────────────────────────────────────────────────────────────────────')}`);
     writeLine(`  ${th.info.bold('Backend logs writing to:')} ${th.muted(LOG_FILE)}`);
-    writeLine(`  ${th.muted('To watch live, open a new tab and run:')} ${th.accent('tail -f ' + LOG_FILE)}`);
+    writeLine(`  ${th.muted('To watch live, open a new terminal tab and run:')} ${th.accent('tail -f ' + LOG_FILE)}`);
     writeLine(`  ${th.muted('────────────────────────────────────────────────────────────────────────────')}`);
     writeLine();
 }
@@ -206,7 +205,6 @@ function renderResultCard(problemText, result, elapsed) {
     writeLine(`  ${th.primary.bold('◆ MATHEMATICAL SOLUTION')}`);
     const solText = result.explanation?.undergraduate || result.finalResponse || 'Proof complete.';
 
-    // ⚡ Rich Formatting for Markdown elements inside CLI
     solText.split('\n').forEach(line => {
         const trimmed = line.trim();
         if (trimmed.startsWith('#')) {
@@ -347,7 +345,7 @@ async function startREPL() {
         inputBuffer.push(cleanLine);
         clearTimeout(pasteTimeout);
 
-        rl.setPrompt(''); // Hide prompt during paste
+        rl.setPrompt('');
 
         pasteTimeout = setTimeout(async () => {
             const input = inputBuffer.join('\n').trim();
@@ -377,9 +375,9 @@ async function startREPL() {
             const streamHandler = (type, data) => {
                 if (type === 'status') {
                     if (activeAgentStream) {
-                        writeLine(); // New line after agent finishes streaming
+                        writeLine();
                         activeAgentStream = null;
-                        spinner.start(); // Resume spinner
+                        spinner.start();
                     }
                     const msg = data.message.replace(/\[.*?\]/, '').trim();
                     const cleanMsg = msg.length > 70 ? msg.slice(0, 67) + '...' : msg;
@@ -390,15 +388,13 @@ async function startREPL() {
 
                     if (activeAgentStream !== agentName) {
                         if (activeAgentStream) writeLine();
-                        spinner.stop(); // Pause spinner to render agent badge
+                        spinner.stop();
                         writeLine();
                         process.stdout.write(`  ${th.accent.bold(`🧠 [${agentName}]`)}: `);
                         activeAgentStream = agentName;
                     }
 
                     process.stdout.write(th.muted(tokenStr));
-                    
-                    // Stream silently to background log for tail -f
                     fs.appendFileSync(LOG_FILE, tokenStr, 'utf8');
                 }
             };
