@@ -11,6 +11,9 @@ process.on('exit', () => {
     process.stdout.write('\x1b[?2004l');
 });
 
+import dns from 'dns';
+dns.setDefaultResultOrder('ipv4first'); // ⚡ Universal Windows/Mac IPv6 fallback fix
+
 import fs from 'fs';
 import path from 'path';
 import os from 'os';

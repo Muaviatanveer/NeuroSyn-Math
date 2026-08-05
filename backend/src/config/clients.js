@@ -18,7 +18,7 @@ export const MODELS = {
 
 class ClientRegistry {
     get clientBaseUrl() {
-        return process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434/v1';
+        return process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1';
     }
 
     getClients() {

@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/neurosyn_math';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/neurosyn_math';
 
 // 1. USER SCHEMA
 const userSchema = new mongoose.Schema({
@@ -52,15 +52,7 @@ export class DatabaseService {
     async connect() {
         if (this.isConnected) return true;
         try {
-            const connectPromise = mongoose.connect(MONGODB_URI, { 
-                serverSelectionTimeoutMS: 3000, 
-                connectTimeoutMS: 3000,
-                family: 4 
-            });
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('MongoDB Connection Timeout')), 3000));
-            
-            await Promise.race([connectPromise, timeoutPromise]);
-            
+            await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 3000 });
             this.isConnected = true;
             logger.info(`[MongoDB] Connected to local database at: ${MONGODB_URI}`);
             return true;
