@@ -351,7 +351,18 @@ async function startREPL() {
     rl.on('line', (line) => {
         if (isProcessing) return;
 
-        const cleanLine = line.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
+        let cleanLine = line.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
+        
+        // Multiline support: if line ends with '\', continue reading
+        if (cleanLine.trim().endsWith('\\')) {
+            inputBuffer.push(cleanLine.replace(/\\$/, ''));
+            clearTimeout(pasteTimeout);
+            const th = getTheme();
+            rl.setPrompt(th.accent('... '));
+            rl.prompt();
+            return;
+        }
+
         inputBuffer.push(cleanLine);
         clearTimeout(pasteTimeout);
 
@@ -436,6 +447,7 @@ async function startREPL() {
             }
 
             isProcessing = false;
+            writeLine();
             rl.prompt();
         }, 500);
     });
