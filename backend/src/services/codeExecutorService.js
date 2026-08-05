@@ -69,8 +69,8 @@ export async function executeCodeInContainer(language, code) {
     try {
         return await _runInDocker(config, tempDir);
     } catch (dockerErr) {
-        logger.warn(`[CodeExecutor] Docker unavailable (${dockerErr.message}). Attempting local fallback...`);
-        return await _runInLocalFallback(filePath, language);
+        logger.error(`[CodeExecutor] Docker unavailable. Local fallback disabled for security.`);
+        return { output: '', error: 'Docker is required for secure code execution.', exitCode: 1 };
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
     }
@@ -113,17 +113,4 @@ async function _runInDocker(config, tempDir) {
     clearTimeout(timer);
 
     return { output: output.trim(), error: error.trim(), exitCode: status.StatusCode };
-}
-
-function _runInLocalFallback(filePath, language) {
-    return new Promise((resolve) => {
-        const cmd = language === 'python' ? `python3 "${filePath}"` : `node "${filePath}"`;
-        exec(cmd, { timeout: EXECUTION_TIMEOUT_S * 1000 }, (error, stdout, stderr) => {
-            resolve({
-                output: stdout ? stdout.trim() : '',
-                error: stderr ? stderr.trim() : (error ? error.message : ''),
-                exitCode: error ? (error.code || 1) : 0
-            });
-        });
-    });
 }
