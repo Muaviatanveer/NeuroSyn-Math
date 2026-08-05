@@ -86,14 +86,19 @@ Provide a single, clear mathematical tip or tactic strategy (1-2 sentences). Do 
 Example: "When handling modular congruence proofs for prime powers, apply Euler's totient theorem before modular inversion."
 `;
 
-        const res = await this.client.chat.completions.create({
-            model: this.synthesisModel,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1
-        });
+        try {
+            const res = await this.client.chat.completions.create({
+                model: this.synthesisModel,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1
+            });
 
-        const raw = res.choices[0].message.content;
-        return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            const raw = res.choices[0].message.content;
+            return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        } catch (e) {
+            this.logger.warn(`[CognitiveMirror] Insight generation fallback: ${e.message}`);
+            return "General mathematical insight derived from successful proof execution.";
+        }
     }
 
     async _generateEmbedding(text) {

@@ -53,6 +53,13 @@ logger.error = (msg) => {
 };
 logger.debug = (msg) => writeToFile('debug', msg);
 
+process.on('uncaughtException', (err) => {
+    logger.error(`Uncaught Exception: ${err.message}`);
+});
+process.on('unhandledRejection', (reason) => {
+    logger.error(`Unhandled Rejection: ${reason.message || reason}`);
+});
+
 // Load local .env or fallback to ~/.neurosyn/.env
 if (fs.existsSync('.env')) {
     process.loadEnvFile('.env');
