@@ -88,21 +88,38 @@ export class NumberTheoryAgent {
 
     async _generateNumberTheoryScript(prompt, stream) {
         const sysPrompt = `
-You are the Number Theory Tool Generator for NumberTheoryAgent in NeuroSyn-Math.
-Write a standalone Python script to solve or verify the number-theoretic problem.
-
-⚡ CRITICAL PRECISION & ALGORITHMIC CONSTRAINTS:
-1. Python floats lose precision above 10^15. DO NOT use \`math.exp()\` or \`math.log()\` to recover exact integer modulo results.
-2. For Meet-in-the-Middle subset algorithms, track the exact integer products/sums alongside subset values so exact modulo arithmetic (% MOD) can be computed.
-3. Keep memory overhead low (use generator expressions, efficient lists).
-
-Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
+You are the Number Theory Tool Generator. Write a standalone Python script.
+⚡ CRITICAL:
+1. Do NOT write endless explanations.
+2. Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
 `;
 
-        const fullContent = await this._streamLLM(sysPrompt, `Problem: "${prompt}"`, stream, this.name, 0.0, 1000);
-        if (!fullContent) return null;
-        const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
-        return match[1].trim();
+        try {
+            const response = await this.client.chat.completions.create({
+                model: this.modelName,
+                messages: [
+                    { role: 'system', content: sysPrompt },
+                    { role: 'user', content: `Problem: "${prompt}"` }
+                ],
+                temperature: 0.0,
+                max_tokens: 800, // ⚡ Cap tokens so deepseek-r1 doesn't loop infinitely!
+                stream: true     // ⚡ Live token streaming
+            });
+
+            let fullContent = '';
+            for await (const chunk of response) {
+                const token = chunk.choices[0]?.delta?.content || '';
+                fullContent += token;
+                if (token && typeof stream === 'function') {
+                    stream('token', { agent: this.name, token }); // ⚡ Stream token to terminal!
+                }
+            }
+
+            const match = fullContent.match(/```python\s*([\s\S]*?)\s*```/) || [null, fullContent];
+            return match[1].trim();
+        } catch (e) {
+            return null;
+        }
     }
 
     async _repairPythonScript(badScript, errorMessage, stream) {
