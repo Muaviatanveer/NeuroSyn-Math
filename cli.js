@@ -338,42 +338,48 @@ async function handleCommand(cmdString) {
 /* ============================================================================
  * 6. INTERACTIVE REPL LOOP
  * ==========================================================================*/
+
+// askLine: creates a FRESH readline interface per read.
+// This prevents state corruption that occurs when ora spinners or boxen
+// write directly to stdout, causing a shared rl.question to silently hang.
+function askLine(promptText) {
+    return new Promise((resolve) => {
+        const iface = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+            terminal: true
+        });
+        // Resolve on SIGINT too so the while loop can exit cleanly
+        const sigintHandler = () => {
+            iface.close();
+            writeLine(`\n\n  ${getTheme().muted('Goodbye!')}\n`);
+            process.exit(0);
+        };
+        process.once('SIGINT', sigintHandler);
+        iface.question(promptText, (answer) => {
+            process.removeListener('SIGINT', sigintHandler);
+            iface.close();
+            resolve(answer);
+        });
+    });
+}
+
 async function startREPL() {
     await authenticateUser();
     printMinimalHeader();
 
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
-    rl.on('SIGINT', () => {
-        writeLine(`\n\n  ${getTheme().muted('Goodbye!')}\n`);
-        process.exit(0);
-    });
-
     while (true) {
         const th = getTheme();
-        
-        let line;
-        try {
-            line = await new Promise((resolve) => {
-                rl.question(th.promptColor('NeuroSyn ❯ '), resolve);
-            });
-        } catch (err) {
-            break;
-        }
 
-        let cleanLine = line.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
-        
+        const rawLine = await askLine(th.promptColor('NeuroSyn ❯ '));
+        let cleanLine = rawLine.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, '');
+
         // Handle multiline with \
         let inputBuffer = [cleanLine];
         while (inputBuffer[inputBuffer.length - 1].trim().endsWith('\\')) {
             inputBuffer[inputBuffer.length - 1] = inputBuffer[inputBuffer.length - 1].replace(/\\$/, '');
-            const nextLine = await new Promise((resolve) => {
-                rl.question(th.accent('... '), resolve);
-            });
-            inputBuffer.push(nextLine.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, ''));
+            const nextRaw = await askLine(th.accent('... '));
+            inputBuffer.push(nextRaw.replace(/\x1b\[200~/g, '').replace(/\x1b\[201~/g, ''));
         }
 
         const input = inputBuffer.join('\n').trim();
@@ -388,9 +394,9 @@ async function startREPL() {
         let timer = setInterval(() => {
             const elapSec = (performance.now() - startMs) / 1000;
             const elap = elapSec.toFixed(1);
-            
+
             let currentText = spinner.text.replace(/ \[\d+\.\ds\]$/, '').replace(/ - (Model is processing context|Model is generating deep).*$/, '');
-            
+
             if (!activeAgentStream && elapSec > 15) {
                 if (elapSec > 120) {
                     currentText += ' - Model is generating deep reasoning...';
@@ -398,7 +404,7 @@ async function startREPL() {
                     currentText += ' - Model is processing context (Prompt Evaluation)...';
                 }
             }
-            
+
             spinner.text = `${currentText} ${th.muted('[' + elap + 's]')}`;
         }, 500);
 
@@ -442,7 +448,7 @@ async function startREPL() {
                 writeLine();
                 writeLine(`  ${th.success.bold('✔ Reasoning Complete')} ${th.muted('(' + elapsed + 's)')}`);
             }
-            
+
             await dbService.saveHistory(activeUser, input, result, elapsed);
             renderResultCard(input, result, elapsed);
         } catch (err) {
