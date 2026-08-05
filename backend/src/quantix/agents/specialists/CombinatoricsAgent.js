@@ -136,7 +136,7 @@ STRICT INSTRUCTIONS:
 `;
 
         const userPrompt = `Problem: "${prompt}"\nTool Output: ${toolOutput}\nVerified Python Code:\n\`\`\`python\n${verifiedScript || ''}\n\`\`\``;
-        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1);
+        const fullContent = await this._streamLLM(sysPrompt, userPrompt, stream, this.name, 0.1, 1500);
 
         // Clean the <think> tags out of the raw text
         let rawText = fullContent || '';

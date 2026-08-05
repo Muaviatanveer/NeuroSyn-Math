@@ -59,6 +59,7 @@ Output ONLY a valid Python code block inside \`\`\`python ... \`\`\` fences.
                     { role: 'user', content: `Problem: "${prompt}"` }
                 ],
                 temperature: 0.0,
+                max_tokens: 800, // ⚡ Cap tokens to prevent loops
                 stream: true // ⚡ Stream live tokens!
             });
 
@@ -105,6 +106,7 @@ Respond strictly in JSON format:
                 ],
                 response_format: { type: 'json_object' },
                 temperature: 0.1,
+                max_tokens: 1500, // ⚡ Cap tokens to prevent loops
                 stream: true // ⚡ Stream live proof generation!
             });
 
