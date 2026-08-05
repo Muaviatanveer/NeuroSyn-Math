@@ -68,10 +68,16 @@ export class TaskConstructor {
                 temperature: 0.1
             });
 
-            const content = response?.choices?.[0]?.message?.content;
-            if (!content) throw new Error("Empty response from LLM during task detailing.");
-
-            const details = JSON.parse(content);
+            let rawContent = response?.choices?.[0]?.message?.content || '';
+            let cleaned = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && start <= end) {
+                cleaned = cleaned.substring(start, end + 1);
+            }
+            if (!cleaned) throw new Error("Empty response from LLM during task detailing.");
+            const details = JSON.parse(cleaned);
             return {
                 name: stepText,
                 ...details

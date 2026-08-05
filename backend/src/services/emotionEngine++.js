@@ -69,7 +69,17 @@ Analyze the user prompt and generate an intent map strictly in JSON:
                 temperature: 0.1
             });
 
-            const parsed = JSON.parse(response.choices[0].message.content);
+            let rawContent = response.choices[0].message.content || '';
+            let cleaned = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+            
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && start <= end) {
+                cleaned = cleaned.substring(start, end + 1);
+            }
+            
+            const parsed = JSON.parse(cleaned);
             return { ...parsed, prompt };
         } catch (e) {
             logger.warn(`[EmotionEngine++] Fallback state returned: ${e.message}`);

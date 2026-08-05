@@ -42,7 +42,15 @@ export class NeuroPlanner {
                 temperature: 0.2
             });
 
-            const parsed = JSON.parse(response.choices[0].message.content);
+            let rawContent = response.choices[0].message.content || '';
+            let cleaned = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            cleaned = cleaned.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start !== -1 && end !== -1 && start <= end) {
+                cleaned = cleaned.substring(start, end + 1);
+            }
+            const parsed = JSON.parse(cleaned);
             const planSteps = parsed.steps || parsed.plan || [];
 
             if (planSteps.length === 0) {
